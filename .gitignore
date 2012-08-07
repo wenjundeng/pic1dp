@@ -1,0 +1,9 @@
+build/*.o
+build/*.mod
+build/pic1dp
+
+run/pic1dp
+run/pic1dp.log
+
+visual/*.pyc
+
