@@ -5,7 +5,7 @@ endif
 
 # compiling options
 ifndef FFLAGS
-	FFLAGS := -O2
+	FFLAGS := -g -fbounds-check
 endif
 
 SRCDIR := ../src

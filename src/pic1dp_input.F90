@@ -41,13 +41,13 @@ PetscReal, dimension(input_nspecies), parameter :: &
 PetscReal, parameter :: input_dt = 0.1_kpr
 
 ! # of marker particles per species
-PetscInt, parameter :: input_nparticle = 10000000
+PetscInt, parameter :: input_nparticle = 10000
 
 ! length in real space (normalized by electron Debye length)
 PetscReal, parameter :: input_lx = 16.0_kpr
 
 ! # of grid points in real space
-PetscInt, parameter :: input_nx = 64
+PetscInt, parameter :: input_nx = 3
 
 ! # of modes kept
 PetscInt, parameter :: input_nmode = 1
@@ -77,7 +77,7 @@ PetscInt, parameter :: input_verbosity = 1
 PetscReal, parameter :: input_output_interval = 0.5_kpr
 
 ! # of velocity grid for output
-PetscInt, parameter :: input_output_nv = 128
+PetscInt, parameter :: input_output_nv = 7
 
 ! maximum velocity in output
 PetscReal, parameter :: input_output_v_max = 5.0_kpr

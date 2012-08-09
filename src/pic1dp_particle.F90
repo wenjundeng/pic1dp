@@ -68,7 +68,7 @@ call gaussian_init(input_seed_type, global_mype)
 
 call VecGetOwnershipRange(particle_x(1), ip_low, ip_high, global_ierr)
 CHKERRQ(global_ierr)
-allocate (indexes(0 : ip_high - ip_low), values(0 : ip_high - ip_low))
+allocate (indexes(0 : ip_high - ip_low - 1), values(0 : ip_high - ip_low - 1))
 nindex = ip_high - ip_low
 indexes = (/ (ip, ip = ip_low, ip_high - 1) /)
 do ispecies = 1, input_nspecies
@@ -100,6 +100,14 @@ do ispecies = 1, input_nspecies
 end do
 deallocate (indexes, values)
 
+!  call VecView(particle_x(1), PETSC_VIEWER_STDOUT_WORLD, global_ierrglobal_)
+!  CHKERRQ(global_ierr)
+!  call VecView(particle_v(1), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
+!  CHKERRQ(global_ierr)
+!  call VecView(particle_p(1), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
+!  CHKERRQ(global_ierr)
+!  call VecView(particle_w(1), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
+!  CHKERRQ(global_ierr)
 
 end subroutine particle_load
 
@@ -114,11 +122,14 @@ implicit none
 
 PetscInt :: ispecies, nindex
 PetscInt :: ip_low, ip_high, ip
+PetscInt :: ip_low1, ip_high1
 PetscInt :: ix1, ix2, iv, ixv
 PetscScalar :: sx, sv
 PetscScalar, dimension(:), pointer :: px, pv
 PetscInt, dimension(0 : 3) :: indexes
 PetscScalar, dimension(0 : 3) :: values
+
+!call global_pp('checkpoint1\n')
 
 call VecGetOwnershipRange(particle_x(1), ip_low, ip_high, global_ierr)
 CHKERRQ(global_ierr)
@@ -129,10 +140,17 @@ do ispecies = 1, input_nspecies
   call global_matcreate(particle_mat_shape_xv(ispecies), &
     input_nparticle, input_nx * input_output_nv, 4, 4)
 
+!call global_pp('checkpoint2\n')
   call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
   call VecGetArrayF90(particle_v(ispecies), pv, global_ierr)
   CHKERRQ(global_ierr)
+
+  call MatGetOwnershipRange(particle_mat_shape_xv(ispecies), &
+    ip_low1, ip_high1, global_ierr)
+  CHKERRQ(global_ierr)
+  write (global_msg, *) ip_low, ip_low1, ip_high, ip_high1, '\n'
+  call global_pp(global_msg)
 
   do ip = ip_low, ip_high - 1
     if ( &
@@ -169,16 +187,20 @@ do ispecies = 1, input_nspecies
   call MatAssemblyBegin(particle_mat_shape_xv(ispecies), &
     MAT_FINAL_ASSEMBLY, global_ierr)
   CHKERRQ(global_ierr)
+  call MatAssemblyEnd(particle_mat_shape_xv(ispecies), &
+    MAT_FINAL_ASSEMBLY, global_ierr)
+  CHKERRQ(global_ierr)
 
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
   call VecRestoreArrayF90(particle_v(ispecies), pv, global_ierr)
   CHKERRQ(global_ierr)
 
-  call MatAssemblyEnd(particle_mat_shape_xv(ispecies), &
-    MAT_FINAL_ASSEMBLY, global_ierr)
-  CHKERRQ(global_ierr)
 
+!  call VecView(particle_x(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
+!  CHKERRQ(global_ierr)
+!  call VecView(particle_v(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
+!  CHKERRQ(global_ierr)
 !  call MatView(particle_mat_shape_xv(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
 !  CHKERRQ(global_ierr)
 end do

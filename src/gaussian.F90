@@ -78,7 +78,7 @@ do iarray = iarray_low, iarray_high, 2
   end do
   w = sqrt((-2.0_grk * log(w)) / w)
   array(iarray) = unirand2(1) * w
-  if (iarray <= iarray_high) array(iarray + 1) = unirand2(2) * w
+  if (iarray < iarray_high) array(iarray + 1) = unirand2(2) * w
 end do
 
 end subroutine gaussian_generate
