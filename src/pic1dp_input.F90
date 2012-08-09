@@ -41,7 +41,7 @@ PetscReal, dimension(input_nspecies), parameter :: &
 PetscReal, parameter :: input_dt = 0.1_kpr
 
 ! # of marker particles per species
-PetscInt, parameter :: input_nparticle = 1000000
+PetscInt, parameter :: input_nparticle = 10000000
 
 ! length in real space (normalized by electron Debye length)
 PetscReal, parameter :: input_lx = 16.0_kpr

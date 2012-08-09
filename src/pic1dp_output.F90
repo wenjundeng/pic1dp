@@ -52,6 +52,9 @@ call MatMultTranspose(particle_mat_shape_xv, particle_p, &
   output_ptcldist, global_ierr)
 CHKERRQ(global_ierr)
 
+!call VecView(output_ptcldist, PETSC_VIEWER_STDOUT_WORLD, global_ierr)
+!CHKERRQ(global_ierr)
+
 realbuf(1) = input_lx
 realbuf(2) = input_output_v_max
 call PetscViewerBinaryWriteReal(output_viewer, realbuf, 2, &

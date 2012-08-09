@@ -92,8 +92,14 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
   call VecAssemblyEnd(particle_x(ispecies), global_ierr)
   CHKERRQ(global_ierr)
+
+  call VecSet(particle_p(ispecies), 1.0_kpr, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecSet(particle_w(ispecies), 0.0_kpr, global_ierr)
+  CHKERRQ(global_ierr)
 end do
 deallocate (indexes, values)
+
 
 end subroutine particle_load
 
@@ -172,6 +178,9 @@ do ispecies = 1, input_nspecies
   call MatAssemblyEnd(particle_mat_shape_xv(ispecies), &
     MAT_FINAL_ASSEMBLY, global_ierr)
   CHKERRQ(global_ierr)
+
+!  call MatView(particle_mat_shape_xv(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
+!  CHKERRQ(global_ierr)
 end do
 
 end subroutine particle_construct_mat_shape_xv
