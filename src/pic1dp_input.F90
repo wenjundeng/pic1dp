@@ -27,10 +27,12 @@ PetscInt, parameter :: input_linear = 1
 PetscInt, parameter :: input_nspecies = 1
 
 ! particle charge (normalized by proton charge e),
-! and mass (normalized by electron mass)
+! mass (normalized by electron mass),
+! and temperature (normalized by electron temperature)
 PetscReal, dimension(input_nspecies), parameter :: &
   input_charge = (/ -1.0_kpr /), &
-  input_mass = (/ 1.0_kpr /)
+  input_mass = (/ 1.0_kpr /), &
+  input_temperature = (/ 1.0_kpr /)
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!

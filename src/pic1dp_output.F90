@@ -47,8 +47,8 @@ implicit none
 PetscInt, dimension(2) :: intbuf
 PetscReal, dimension(2) :: realbuf
 
-call particle_construct_mat_shape_xv
-call MatMultTranspose(particle_mat_shape_xv, particle_p, &
+call particle_compute_shape_xv
+call MatMultTranspose(particle_shape_xv, particle_p, &
   output_ptcldist, global_ierr)
 CHKERRQ(global_ierr)
 
