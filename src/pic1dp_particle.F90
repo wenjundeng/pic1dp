@@ -8,7 +8,10 @@ implicit none
 ! f is total distribution, delta f is perturbed distribution
 ! g is marker distribution
 Vec, dimension(input_nspecies) :: &
-  particle_x, particle_v, particle_p, particle_w
+  particle_x, particle_v, particle_p, particle_w, &
+  particle_x_bak, particle_v_bak, particle_w_bak
+
+Vec :: particle_tmp1, particle_tmp2
 
 Mat, dimension(input_nspecies) :: &
   particle_shape_xv, particle_shape_x
@@ -45,11 +48,23 @@ do ispecies = 1, input_nspecies
   call VecDuplicate(particle_x(1), particle_w(ispecies), global_ierr)
   CHKERRQ(global_ierr)
 
+  call VecDuplicate(particle_x(1), particle_x_bak(ispecies), global_ierr)
+  CHKERRQ(global_ierr)
+  call VecDuplicate(particle_x(1), particle_v_bak(ispecies), global_ierr)
+  CHKERRQ(global_ierr)
+  call VecDuplicate(particle_x(1), particle_w_bak(ispecies), global_ierr)
+  CHKERRQ(global_ierr)
+
   call global_matcreate(particle_shape_xv(ispecies), &
     input_nparticle, input_nx * input_output_nv, 4, 4)
   call global_matcreate(particle_shape_x(ispecies), &
     input_nparticle, input_nx, 2, 2)
 end do
+
+call VecDuplicate(particle_x(1), particle_tmp1, global_ierr)
+CHKERRQ(global_ierr)
+call VecDuplicate(particle_x(1), particle_tmp2, global_ierr)
+CHKERRQ(global_ierr)
 
 end subroutine particle_init
 
@@ -181,10 +196,10 @@ do ispecies = 1, input_nspecies
     indexes(1) = iv * input_nx + ix2
     indexes(2) = (iv + 1) * input_nx + ix1
     indexes(3) = (iv + 1) * input_nx + ix2
-    values(0) = sx * sv
-    values(1) = (1.0_kpr - sx) * sv
-    values(2) = sx * (1.0_kpr - sv)
-    values(3) = (1.0_kpr - sx) * (1.0_kpr - sv)
+    values(0) = (1.0_kpr - sx) * (1.0_kpr - sv)
+    values(1) = sx * (1.0_kpr - sv)
+    values(2) = (1.0_kpr - sx) * sv
+    values(3) = sx * sv
     call MatSetValues( &
       particle_shape_xv(ispecies), 1, ip, &
       nindex, indexes, values, INSERT_VALUES, global_ierr &
@@ -225,14 +240,11 @@ implicit none
 
 PetscInt :: ispecies, nindex
 PetscInt :: ip_low, ip_high, ip
-PetscInt :: ip_low1, ip_high1
 PetscInt :: ix1, ix2
 PetscScalar :: sx
 PetscScalar, dimension(:), pointer :: px
 PetscInt, dimension(0 : 1) :: indexes
 PetscScalar, dimension(0 : 1) :: values
-
-!call global_pp('checkpoint1\n')
 
 call VecGetOwnershipRange(particle_x(1), ip_low, ip_high, global_ierr)
 CHKERRQ(global_ierr)
@@ -245,17 +257,16 @@ do ispecies = 1, input_nspecies
   call MatZeroEntries(particle_shape_x(ispecies), global_ierr)
   CHKERRQ(global_ierr)
 
-!call global_pp('checkpoint2\n')
   call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
 
-  call MatGetOwnershipRange(particle_shape_xv(ispecies), &
-    ip_low1, ip_high1, global_ierr)
-  CHKERRQ(global_ierr)
-  write (global_msg, *) ip_low, ip_low1, ip_high, ip_high1, '\n'
-!  call global_pp(global_msg)
-
   do ip = ip_low, ip_high - 1
+    ! enforce periodic boundary condition
+    px(ip - ip_low + 1) = mod(px(ip - ip_low + 1), input_lx)
+    ! if x is negative, mod gives negative result, so shift it to positive
+    if (px(ip - ip_low + 1) < 0.0_kpr) &
+      px(ip - ip_low + 1) = px(ip - ip_low + 1) + input_lx
+
     sx = px(ip - ip_low + 1) / input_lx * input_nx
     ix1 = floor(sx)
     sx = sx - real(ix1, kpr)
@@ -265,8 +276,8 @@ do ispecies = 1, input_nspecies
     nindex = 2
     indexes(0) = ix1
     indexes(1) = ix2
-    values(0) = sx
-    values(1) = (1.0_kpr - sx)
+    values(0) = (1.0_kpr - sx)
+    values(1) = sx
     call MatSetValues( &
       particle_shape_x(ispecies), 1, ip, &
       nindex, indexes, values, INSERT_VALUES, global_ierr &
@@ -282,7 +293,6 @@ do ispecies = 1, input_nspecies
 
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
-
 
 !  call VecView(particle_x(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
 !  CHKERRQ(global_ierr)
@@ -315,11 +325,23 @@ do ispecies = 1, input_nspecies
   call VecDestroy(particle_w(ispecies), global_ierr)
   CHKERRQ(global_ierr)
 
+  call VecDestroy(particle_x_bak(ispecies), global_ierr)
+  CHKERRQ(global_ierr)
+  call VecDestroy(particle_v_bak(ispecies), global_ierr)
+  CHKERRQ(global_ierr)
+  call VecDestroy(particle_w_bak(ispecies), global_ierr)
+  CHKERRQ(global_ierr)
+
   call MatDestroy(particle_shape_xv(ispecies), global_ierr)
   CHKERRQ(global_ierr)
   call MatDestroy(particle_shape_x(ispecies), global_ierr)
   CHKERRQ(global_ierr)
 end do
+
+call VecDestroy(particle_tmp1, global_ierr)
+CHKERRQ(global_ierr)
+call VecDestroy(particle_tmp2, global_ierr)
+CHKERRQ(global_ierr)
 
 end subroutine particle_final
 

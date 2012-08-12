@@ -43,25 +43,26 @@ PetscReal, dimension(input_nspecies), parameter :: &
 PetscReal, parameter :: input_dt = 0.1_kpr
 
 ! # of marker particles per species
-PetscInt, parameter :: input_nparticle = 10000
+PetscInt, parameter :: input_nparticle = 4
 
 ! length in real space (normalized by electron Debye length)
 PetscReal, parameter :: input_lx = 16.0_kpr
 
 ! # of grid points in real space
-PetscInt, parameter :: input_nx = 3
+PetscInt, parameter :: input_nx = 4
 
 ! # of modes kept
-PetscInt, parameter :: input_nmode = 1
+PetscInt, parameter :: input_nmode = 2
 
 ! modes kept
 ! for each mode, the number here gives the # of mode periods in real space
-PetscInt, dimension(input_nmode), parameter :: input_mode = (/ 1 /)
+PetscInt, dimension(0 : input_nmode - 1), parameter :: input_mode &
+  = (/ 1, 2 /)
 
 ! random seed type
 ! 1: random seeds (using system_clock)
 ! 2: constant seeds
-PetscInt, parameter :: input_seed_type = 1
+PetscInt, parameter :: input_seed_type = 2
 
 !!!!!!!!!!!!!!!!!!!!!
 ! output parameters !

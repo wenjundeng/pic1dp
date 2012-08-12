@@ -21,18 +21,21 @@ class OutputData:
         self.lx, self.v_max = io.readReal(fdata, 2)
         self.nx, self.nv = io.readInt(fdata, 2)
 
-        ptcldist, = io.readBinaryFile(fdata)
+        ptcldist = io.readBinaryFile(fdata)[0]
         #print ptcldist
         ptcldist.resize(self.nv, self.nx)
 
         self.ptcldist_xv = np.zeros((self.nv, self.nx + 1))
         self.ptcldist_xv[:, 0 : self.nx] = ptcldist
         self.ptcldist_xv[:, self.nx] = ptcldist[:, 0]
-        print self.ptcldist_xv[65, :]
+        #print self.ptcldist_xv
 
-        self.x = np.arange(self.nx + 1) / self.nx * self.lx
-        self.v = (np.arange(self.nv) / (self.nv - 1) - 0.5) * 2.0 * self.v_max
+        self.x = np.arange(self.nx + 1.0) / self.nx * self.lx
+        self.v = (np.arange(self.nv + 0.0) / (self.nv - 1) - 0.5) * 2.0 * self.v_max
         self.xv = np.meshgrid(self.x, self.v)
+        print self.x
+        print self.v
+        print self.xv
 
     def getptcldist():
         pass
