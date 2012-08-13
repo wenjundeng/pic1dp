@@ -30,8 +30,8 @@ implicit none
 PetscInt :: ix, ix_low, ix_high
 PetscInt :: imode, imode_low, imode_high
 PetscInt :: nindex
-PetscInt, dimension(0 : input_nmode - 1) :: indexes
-PetscScalar, dimension(0 : input_nmode - 1) :: values
+PetscInt, dimension(0 : max(input_nmode, input_nx)) :: indexes
+PetscScalar, dimension(0 : max(input_nmode, input_nx)) :: values
 
 call VecCreate(MPI_COMM_WORLD, field_electric, global_ierr)
 CHKERRQ(global_ierr)
@@ -57,7 +57,6 @@ CHKERRQ(global_ierr)
 call VecDuplicate(field_mode_re, field_mode_grad_inv, global_ierr)
 CHKERRQ(global_ierr)
 
-! initialize Fourier matrixes
 call MatCreate(MPI_COMM_WORLD, field_fourier_re, global_ierr)
 CHKERRQ(global_ierr)
 call MatSetType(field_fourier_re, MATDENSE, global_ierr)
@@ -86,37 +85,30 @@ CHKERRQ(global_ierr)
 !call global_matcreate(field_fourier_im, input_nx, input_nmode, &
 !  input_nmode, input_nmode)
 
-call MatGetOwnershipRange(field_fourier_re, ix_low, ix_high, global_ierr)
+
+! initialize electric field by initial condition
+call VecGetOwnershipRange(field_electric, ix_low, ix_high, global_ierr)
+CHKERRQ(global_ierr)
+nindex = ix_high - ix_low
+do ix = ix_low, ix_high - 1
+  indexes(ix - ix_low) = ix
+  values(ix - ix_low) = 0.0_kpr
+  do imode = 0, input_init_nmode - 1
+    values(ix - ix_low) = values(ix - ix_low) &
+      + input_init_mode_cos(imode) * cos(2.0_kpr * PETSC_PI / input_nx &
+        * real(input_init_mode(imode), kpr) * ix) &
+      + input_init_mode_sin(imode) * sin(2.0_kpr * PETSC_PI / input_nx &
+        * real(input_init_mode(imode), kpr) * ix)
+  end do
+end do
+call VecSetValues(field_electric, nindex, indexes, values, &
+  INSERT_VALUES, global_ierr)
+CHKERRQ(global_ierr)
+call VecAssemblyBegin(field_electric, global_ierr)
+CHKERRQ(global_ierr)
+call VecAssemblyEnd(field_electric, global_ierr)
 CHKERRQ(global_ierr)
 
-nindex = input_nmode
-indexes = (/ (imode, imode = 0, input_nmode - 1) /)
-do ix = ix_low, ix_high - 1
-  values = (/ ( &
-    cos(2.0_kpr * PETSC_PI / input_nx * input_mode(imode) * ix), &
-    imode = 0, input_nmode - 1 &
-  ) /)
-  call MatSetValues( &
-    field_fourier_re, 1, ix, &
-    nindex, indexes, values, INSERT_VALUES, global_ierr &
-  )
-  values = (/ ( &
-    -sin(2.0_kpr * PETSC_PI / input_nx * input_mode(imode) * ix), &
-    imode = 0, input_nmode - 1 &
-  ) /)
-  call MatSetValues( &
-    field_fourier_im, 1, ix, &
-    nindex, indexes, values, INSERT_VALUES, global_ierr &
-  )
-end do
-call MatAssemblyBegin(field_fourier_re, MAT_FINAL_ASSEMBLY, global_ierr)
-CHKERRQ(global_ierr)
-call MatAssemblyBegin(field_fourier_im, MAT_FINAL_ASSEMBLY, global_ierr)
-CHKERRQ(global_ierr)
-call MatAssemblyEnd(field_fourier_re, MAT_FINAL_ASSEMBLY, global_ierr)
-CHKERRQ(global_ierr)
-call MatAssemblyEnd(field_fourier_im, MAT_FINAL_ASSEMBLY, global_ierr)
-CHKERRQ(global_ierr)
 
 ! initialize inverse grad operator in partial Fourier space
 call VecGetOwnershipRange(field_mode_grad_inv, imode_low, imode_high, global_ierr)
@@ -132,6 +124,41 @@ CHKERRQ(global_ierr)
 call VecAssemblyBegin(field_mode_grad_inv, global_ierr)
 CHKERRQ(global_ierr)
 call VecAssemblyEnd(field_mode_grad_inv, global_ierr)
+CHKERRQ(global_ierr)
+
+! initialize Fourier matrixes
+call MatGetOwnershipRange(field_fourier_re, ix_low, ix_high, global_ierr)
+CHKERRQ(global_ierr)
+
+nindex = input_nmode
+do imode = 0, input_nmode - 1
+  indexes(imode) = imode
+end do
+do ix = ix_low, ix_high - 1
+  do imode = 0, input_nmode - 1
+    values(imode) = &
+      cos(2.0_kpr * PETSC_PI / input_nx * real(input_mode(imode), kpr) * ix)
+  end do
+  call MatSetValues( &
+    field_fourier_re, 1, ix, &
+    nindex, indexes, values, INSERT_VALUES, global_ierr &
+  )
+  do imode = 0, input_nmode - 1
+    values(imode) = &
+      -sin(2.0_kpr * PETSC_PI / input_nx * real(input_mode(imode), kpr) * ix)
+  end do
+  call MatSetValues( &
+    field_fourier_im, 1, ix, &
+    nindex, indexes, values, INSERT_VALUES, global_ierr &
+  )
+end do
+call MatAssemblyBegin(field_fourier_re, MAT_FINAL_ASSEMBLY, global_ierr)
+CHKERRQ(global_ierr)
+call MatAssemblyBegin(field_fourier_im, MAT_FINAL_ASSEMBLY, global_ierr)
+CHKERRQ(global_ierr)
+call MatAssemblyEnd(field_fourier_re, MAT_FINAL_ASSEMBLY, global_ierr)
+CHKERRQ(global_ierr)
+call MatAssemblyEnd(field_fourier_im, MAT_FINAL_ASSEMBLY, global_ierr)
 CHKERRQ(global_ierr)
 
 end subroutine field_init

@@ -13,7 +13,7 @@ implicit none
 PetscInt, parameter :: input_ntime_max = 900000
 
 ! maximum physical time (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_time_max = 100.0_kpr
+PetscReal, parameter :: input_time_max = 10.0_kpr
 
 
 !!!!!!!!!!!!!!!!!!!!!!!
@@ -22,6 +22,9 @@ PetscReal, parameter :: input_time_max = 100.0_kpr
 
 ! linear or nonlinear run. 0: nonlinear; 1: linear.
 PetscInt, parameter :: input_linear = 1
+
+! length in real space (normalized by electron Debye length)
+PetscReal, parameter :: input_lx = 16.0_kpr
 
 ! # of particle species
 PetscInt, parameter :: input_nspecies = 1
@@ -34,6 +37,30 @@ PetscReal, dimension(input_nspecies), parameter :: &
   input_mass = (/ 1.0_kpr /), &
   input_temperature = (/ 1.0_kpr /)
 
+! # of modes kept
+PetscInt, parameter :: input_nmode = 2
+
+! modes kept
+! for each mode, the number here gives the # of mode periods in real space
+PetscInt, dimension(0 : input_nmode - 1), parameter :: &
+  input_mode = (/ 1, 2 /)
+
+
+!!!!!!!!!!!!!!!!!!!!!
+! initial condition !
+!!!!!!!!!!!!!!!!!!!!!
+! # of modes
+PetscInt, parameter :: input_init_nmode = 1
+
+! initial modes
+PetscInt, dimension(0 : input_init_nmode - 1), parameter :: &
+  input_init_mode = (/ 1 /)
+
+! initial amplitude of each mode (cos and sin part)
+PetscScalar, dimension(0 : input_init_nmode - 1), parameter :: &
+  input_init_mode_cos = (/ 0.0_kpr /), &
+  input_init_mode_sin = (/ 1e-1_kpr /)
+
 
 !!!!!!!!!!!!!!!!!!!!!!!!
 ! numerical parameters !
@@ -43,26 +70,15 @@ PetscReal, dimension(input_nspecies), parameter :: &
 PetscReal, parameter :: input_dt = 0.1_kpr
 
 ! # of marker particles per species
-PetscInt, parameter :: input_nparticle = 4
-
-! length in real space (normalized by electron Debye length)
-PetscReal, parameter :: input_lx = 16.0_kpr
+PetscInt, parameter :: input_nparticle = 6000000
 
 ! # of grid points in real space
-PetscInt, parameter :: input_nx = 4
-
-! # of modes kept
-PetscInt, parameter :: input_nmode = 2
-
-! modes kept
-! for each mode, the number here gives the # of mode periods in real space
-PetscInt, dimension(0 : input_nmode - 1), parameter :: input_mode &
-  = (/ 1, 2 /)
+PetscInt, parameter :: input_nx = 64
 
 ! random seed type
 ! 1: random seeds (using system_clock)
 ! 2: constant seeds
-PetscInt, parameter :: input_seed_type = 2
+PetscInt, parameter :: input_seed_type = 1
 
 !!!!!!!!!!!!!!!!!!!!!
 ! output parameters !
@@ -80,7 +96,7 @@ PetscInt, parameter :: input_verbosity = 1
 PetscReal, parameter :: input_output_interval = 0.5_kpr
 
 ! # of velocity grid for output
-PetscInt, parameter :: input_output_nv = 7
+PetscInt, parameter :: input_output_nv = 128
 
 ! maximum velocity in output
 PetscReal, parameter :: input_output_v_max = 5.0_kpr
