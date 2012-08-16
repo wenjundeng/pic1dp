@@ -253,8 +253,8 @@ PetscReal, intent(in) :: time
 PetscReal :: electric_energe
 
 call output_field(electric_energe)
-call output_ptcldist_xv
-call output_ptcldist_v
+!call output_ptcldist_xv
+!call output_ptcldist_v
 call output_progress(itime, time, electric_energe)
 
 end subroutine output_all

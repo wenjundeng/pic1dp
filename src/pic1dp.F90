@@ -32,7 +32,7 @@ PetscReal :: time ! physical time
 PetscInt :: itermination ! status of termination condition: 0: not to terminate; 1: to terminate
 
 ! for wall clock timers
-character(len = 18), dimension(9) :: string_wt
+character(len = 18), dimension(30) :: string_wt
 
 
 call PetscInitialize(PETSC_NULL_CHARACTER, global_ierr)
@@ -54,12 +54,24 @@ call wtimer_stop(iwt_init)
 call wtimer_start(iwt_particle_load)
 call particle_load
 call wtimer_stop(iwt_particle_load)
-call wtimer_start(iwt_particle_shape)
-call particle_compute_shape_x
-call wtimer_stop(iwt_particle_shape)
+if (input_iptclshape < 4) then
+  call wtimer_start(iwt_particle_shape)
+  call particle_compute_shape_x
+  call wtimer_stop(iwt_particle_shape)
+end if
 
 itime = 0
 time = 0.0_kpr
+
+! solve initial field
+! collect charges
+call wtimer_start(iwt_collect_charge)
+call interaction_collect_charge
+call wtimer_stop(iwt_collect_charge)
+! solve electric field
+call wtimer_start(iwt_field_electric)
+call field_solve_electric
+call wtimer_stop(iwt_field_electric)
 
 ! output for 0th time step
 call wtimer_start(iwt_output)
@@ -77,10 +89,15 @@ do while (itermination == 0)
     call interaction_push_particle(irk)
     call wtimer_stop(iwt_push_particle)
 
-    ! update particle shape matrix
-    call wtimer_start(iwt_particle_shape)
-    call particle_compute_shape_x
-    call wtimer_stop(iwt_particle_shape)
+    if (input_iptclshape < 4) then
+      !call wtimer_start(21)
+      !call particle_zeroshape_x
+      !call wtimer_stop(21)
+      ! update particle shape matrix
+      call wtimer_start(iwt_particle_shape)
+      call particle_compute_shape_x
+      call wtimer_stop(iwt_particle_shape)
+    end if
 
     ! collect charges
     call wtimer_start(iwt_collect_charge)
@@ -151,6 +168,8 @@ if (input_verbosity >= 1) then
   call global_pp( &
     "     finalization                .                .                .\n")
   call wtimer_print(iwt_final, string_wt(iwt_final), iwt_total, .true.)
+!  call wtimer_print(21, string_wt(21), iwt_total, .true.)
+!  call global_pp(string_wt(iwt_final) // string_wt(21) // "\n")
   call global_pp(string_wt(iwt_final) // "\n")
 end if
 

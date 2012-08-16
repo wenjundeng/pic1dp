@@ -13,7 +13,7 @@ implicit none
 PetscInt, parameter :: input_ntime_max = 900000
 
 ! maximum physical time (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_time_max = 10.0_kpr
+PetscReal, parameter :: input_time_max = 50.0_kpr
 
 
 !!!!!!!!!!!!!!!!!!!!!!!
@@ -75,16 +75,24 @@ PetscInt, parameter :: input_nparticle = 6000000
 ! # of grid points in real space
 PetscInt, parameter :: input_nx = 64
 
+! particle shape calculation
+! 1: use PETSc matrix for shape matrix, destroy and re-create matrix every time
+! 2: use PETSc matrix for shape matrix, use MatZeroEntries to reset matrix
+! 3: use regular array for shape matrix
+! 4: calculate shape function as needed, no matrix
+PetscInt, parameter :: input_iptclshape = 4
+
 ! random seed type
 ! 1: random seeds (using system_clock)
 ! 2: constant seeds
-PetscInt, parameter :: input_seed_type = 1
+PetscInt, parameter :: input_seed_type = 2
+
 
 !!!!!!!!!!!!!!!!!!!!!
 ! output parameters !
 !!!!!!!!!!!!!!!!!!!!!
 
-! verbose mode, controlling how  much information is shown to screen (stdout)
+! verbose mode, controlling how much information is shown to screen (stdout)
 ! 0: not showing any information except warnings and errors
 ! 1: besides warnings and errors, show essential information about the program
 ! 2: show additional progress information (only for debugging)
@@ -93,10 +101,10 @@ PetscInt, parameter :: input_seed_type = 1
 PetscInt, parameter :: input_verbosity = 1
 
 ! time interval between data output (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_output_interval = 0.5_kpr
+PetscReal, parameter :: input_output_interval = 1.0_kpr
 
 ! # of velocity grid for output
-PetscInt, parameter :: input_output_nv = 128
+PetscInt, parameter :: input_output_nv = 64
 
 ! maximum velocity in output
 PetscReal, parameter :: input_output_v_max = 5.0_kpr
