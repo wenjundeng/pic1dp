@@ -109,7 +109,7 @@ PetscInt, intent(in) :: irk ! index of Runge-Kutta sub-step
 PetscInt :: ispecies, ix
 PetscInt :: ip
 PetscScalar :: sx
-PetscScalar, dimension(:), pointer :: pe, pp, px
+PetscScalar, dimension(:), pointer :: pe, pptcl, px
 
 PetscScalar :: dt ! time step
 
@@ -150,7 +150,7 @@ do ispecies = 1, input_nspecies
       particle_tmp1, global_ierr)
     CHKERRQ(global_ierr)
   else
-    call VecGetArrayF90(particle_tmp1, pp, global_ierr)
+    call VecGetArrayF90(particle_tmp1, pptcl, global_ierr)
     CHKERRQ(global_ierr)
     if (input_iptclshape == 4) then
       call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
@@ -169,17 +169,17 @@ do ispecies = 1, input_nspecies
         sx = 1.0_kpr - (sx - real(ix, kpr))
       end if
 !      if (global_mype == 0 .and. ip == particle_ip_low) write (*, *) ix, sx
-      pp(ip - particle_ip_low + 1) = pe(ix + 1) * sx
+      pptcl(ip - particle_ip_low + 1) = pe(ix + 1) * sx
       ix = ix + 1
       if (ix > input_nx - 1) ix = 0
-      pp(ip - particle_ip_low + 1) = &
-        pp(ip - particle_ip_low + 1) + pe(ix + 1) * (1.0_kpr - sx)
+      pptcl(ip - particle_ip_low + 1) = &
+        pptcl(ip - particle_ip_low + 1) + pe(ix + 1) * (1.0_kpr - sx)
     end do
     if (input_iptclshape == 4) then
       call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
       CHKERRQ(global_ierr)
     end if
-    call VecRestoreArrayF90(particle_tmp1, pp, global_ierr)
+    call VecRestoreArrayF90(particle_tmp1, pptcl, global_ierr)
     CHKERRQ(global_ierr)
   end if
   ! at this point particle_tmp1 stores electric field at particle positions

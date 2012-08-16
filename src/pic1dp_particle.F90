@@ -185,6 +185,7 @@ end subroutine particle_load
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! compute shape matrix in x-v plane !
+! obsolete                          !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine particle_compute_shape_xv
 use pic1dp_global
@@ -359,6 +360,7 @@ end subroutine particle_compute_shape_x
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! compute shape matrix in v !
+! obsolete                  !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine particle_compute_shape_v
 use pic1dp_global

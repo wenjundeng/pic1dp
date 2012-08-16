@@ -3,7 +3,8 @@ implicit none
 #include "finclude/petscdef.h"
 
 ! for particle distribution
-Vec :: output_vec_ptcldist_xv, output_vec_ptcldist_v
+Vec :: output_vec_ptcldist_xv1, output_vec_ptcldist_xv2
+Vec :: output_vec_ptcldist_v
 
 PetscViewer :: output_viewer ! for output file writing
 
@@ -26,12 +27,15 @@ PetscReal, dimension(nrealparameter) :: realbuf
 
 PetscInt :: iparameter
 
-call VecCreate(MPI_COMM_WORLD, output_vec_ptcldist_xv, global_ierr)
+call VecCreate(MPI_COMM_WORLD, output_vec_ptcldist_xv1, global_ierr)
 CHKERRQ(global_ierr)
-call VecSetSizes(output_vec_ptcldist_xv, PETSC_DECIDE, &
+call VecSetSizes(output_vec_ptcldist_xv1, PETSC_DECIDE, &
   input_nx * input_output_nv, global_ierr)
 CHKERRQ(global_ierr)
-call VecSetFromOptions(output_vec_ptcldist_xv, global_ierr)
+call VecSetFromOptions(output_vec_ptcldist_xv1, global_ierr)
+CHKERRQ(global_ierr)
+call VecDuplicate(output_vec_ptcldist_xv1, &
+  output_vec_ptcldist_xv2, global_ierr)
 CHKERRQ(global_ierr)
 
 call VecCreate(MPI_COMM_WORLD, output_vec_ptcldist_v, global_ierr)
@@ -137,41 +141,157 @@ CHKERRQ(global_ierr)
 end subroutine output_field
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! output physical particle distribution function f and delta f on x-v plane !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine output_ptcldist_xv
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! output physical particle distribution function f and delta f !
+! on x-v plane and in v space                                  !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine output_ptcldist
 use pic1dp_global
 use pic1dp_particle
 implicit none
 #include "finclude/petsc.h90"
 
-PetscInt :: ispecies
+PetscInt :: ispecies, ip, ix, iv
+PetscScalar :: sx, sv
+PetscScalar, dimension(:), pointer :: px, pv, pp, pw
+PetscScalar, dimension(0 : input_nx * input_output_nv - 1) :: &
+  ptcldist_total_xv, ptcldist_pertb_xv, &
+  ptcldist_total_xv_redu, ptcldist_pertb_xv_redu
+PetscScalar, dimension(0 : input_output_nv - 1) :: &
+  ptcldist_total_v, ptcldist_pertb_v, &
+  ptcldist_total_v_redu, ptcldist_pertb_v_redu
 
-! calculate shape matrix in x-v plane
-call particle_compute_shape_xv
+! calculate shape matrix in x-v plane (too slow, no longer used)
+!call particle_compute_shape_xv
 
 do ispecies = 1, input_nspecies
   ! calculate and output f
-  call MatMultTranspose(particle_shape_xv, particle_p(ispecies), &
-    output_vec_ptcldist_xv, global_ierr)
-  CHKERRQ(global_ierr)
-  call VecView(output_vec_ptcldist_xv, output_viewer, global_ierr)
-  CHKERRQ(global_ierr)
+!  call MatMultTranspose(particle_shape_xv, particle_p(ispecies), &
+!    output_vec_ptcldist_xv, global_ierr)
+!  CHKERRQ(global_ierr)
+!  call VecView(output_vec_ptcldist_xv1, output_viewer, global_ierr)
+!  CHKERRQ(global_ierr)
 
   ! calculate and output delta f
-  call MatMultTranspose(particle_shape_xv, particle_w(ispecies), &
-    output_vec_ptcldist_xv, global_ierr)
+!  call MatMultTranspose(particle_shape_xv, particle_w(ispecies), &
+!    output_vec_ptcldist_xv, global_ierr)
+!  CHKERRQ(global_ierr)
+!  call VecView(output_vec_ptcldist_xv2, output_viewer, global_ierr)
+!  CHKERRQ(global_ierr)
+
+
+  ptcldist_total_xv = 0.0_kpr
+  ptcldist_pertb_xv = 0.0_kpr
+  ptcldist_total_v = 0.0_kpr
+  ptcldist_pertb_v = 0.0_kpr
+
+  call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
-  call VecView(output_vec_ptcldist_xv, output_viewer, global_ierr)
+  call VecGetArrayF90(particle_v(ispecies), pv, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_p(ispecies), pp, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
+  CHKERRQ(global_ierr)
+
+  do ip = particle_ip_low, particle_ip_high
+    if (pv(ip - particle_ip_low + 1) <= -input_output_v_max &
+      .or. pv(ip - particle_ip_low + 1) >= input_output_v_max &
+    ) cycle
+
+    sx = px(ip - particle_ip_low + 1) / input_lx * input_nx
+    ix = floor(sx)
+    sx = 1.0_kpr - (sx - real(ix, kpr))
+
+    sv = (pv(ip - particle_ip_low + 1) + input_output_v_max) &
+      / (input_output_v_max * 2.0_kpr) * (input_output_nv - 1)
+    iv = floor(sv)
+    sv = 1.0_kpr - (sv - real(iv, kpr))
+
+    ptcldist_total_xv(iv * input_nx + ix) &
+      = ptcldist_total_xv(iv * input_nx + ix) &
+      + sx * sv * pp(ip - particle_ip_low + 1)
+    ptcldist_pertb_xv(iv * input_nx + ix) &
+      = ptcldist_pertb_xv(iv * input_nx + ix) &
+      + sx * sv * pw(ip - particle_ip_low + 1)
+    ptcldist_total_xv((iv + 1) * input_nx + ix) &
+      = ptcldist_total_xv((iv + 1) * input_nx + ix) &
+      + sx * (1.0_kpr - sv) * pp(ip - particle_ip_low + 1)
+    ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
+      = ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
+      + sx * (1.0_kpr - sv) * pw(ip - particle_ip_low + 1)
+    ix = ix + 1
+    if (ix > input_nx - 1) ix = 0
+    sx = 1.0_kpr - sx
+    ptcldist_total_xv(iv * input_nx + ix) &
+      = ptcldist_total_xv(iv * input_nx + ix) &
+      + sx * sv * pp(ip - particle_ip_low + 1)
+    ptcldist_pertb_xv(iv * input_nx + ix) &
+      = ptcldist_pertb_xv(iv * input_nx + ix) &
+      + sx * sv * pw(ip - particle_ip_low + 1)
+    ptcldist_total_xv((iv + 1) * input_nx + ix) &
+      = ptcldist_total_xv((iv + 1) * input_nx + ix) &
+      + sx * (1.0_kpr - sv) * pp(ip - particle_ip_low + 1)
+    ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
+      = ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
+      + sx * (1.0_kpr - sv) * pw(ip - particle_ip_low + 1)
+
+    ptcldist_total_v(iv) = ptcldist_total_v(iv) &
+      + sv * pp(ip - particle_ip_low + 1)
+    ptcldist_pertb_v(iv) = ptcldist_pertb_v(iv) &
+      + sv * pw(ip - particle_ip_low + 1)
+    ptcldist_total_v(iv + 1) = ptcldist_total_v(iv + 1) &
+      + (1.0_kpr - sv) * pp(ip - particle_ip_low + 1)
+    ptcldist_pertb_v(iv + 1) = ptcldist_pertb_v(iv + 1) &
+      + (1.0_kpr - sv) * pw(ip - particle_ip_low + 1)
+  end do
+  
+  call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_v(ispecies), pv, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_p(ispecies), pp, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
+  CHKERRQ(global_ierr)
+
+  call MPI_Reduce(ptcldist_total_xv, ptcldist_total_xv_redu, &
+    input_nx * input_output_nv, MPIU_SCALAR, MPI_SUM, 0, &
+    MPI_COMM_WORLD, global_ierr)
+  CHKERRQ(global_ierr)
+  call MPI_Reduce(ptcldist_pertb_xv, ptcldist_pertb_xv_redu, &
+    input_nx * input_output_nv, MPIU_SCALAR, MPI_SUM, 0, &
+    MPI_COMM_WORLD, global_ierr)
+  CHKERRQ(global_ierr)
+  call MPI_Reduce(ptcldist_total_v, ptcldist_total_v_redu, &
+    input_output_nv, MPIU_SCALAR, MPI_SUM, 0, &
+    MPI_COMM_WORLD, global_ierr)
+  CHKERRQ(global_ierr)
+  call MPI_Reduce(ptcldist_pertb_v, ptcldist_pertb_v_redu, &
+    input_output_nv, MPIU_SCALAR, MPI_SUM, 0, &
+    MPI_COMM_WORLD, global_ierr)
+  CHKERRQ(global_ierr)
+
+  call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_total_xv_redu, &
+    input_nx * input_output_nv, PETSC_TRUE, global_ierr)
+  CHKERRQ(global_ierr)
+  call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_pertb_xv_redu, &
+    input_nx * input_output_nv, PETSC_TRUE, global_ierr)
+  CHKERRQ(global_ierr)
+  call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_total_v_redu, &
+    input_output_nv, PETSC_TRUE, global_ierr)
+  CHKERRQ(global_ierr)
+  call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_pertb_v_redu, &
+    input_output_nv, PETSC_TRUE, global_ierr)
   CHKERRQ(global_ierr)
 end do
 
-end subroutine output_ptcldist_xv
+end subroutine output_ptcldist
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! output physical particle distribution function f and delta f on v space !
+! obsolete                                                                !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine output_ptcldist_v
 use pic1dp_global
@@ -253,8 +373,7 @@ PetscReal, intent(in) :: time
 PetscReal :: electric_energe
 
 call output_field(electric_energe)
-!call output_ptcldist_xv
-!call output_ptcldist_v
+call output_ptcldist
 call output_progress(itime, time, electric_energe)
 
 end subroutine output_all
@@ -268,7 +387,9 @@ use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
 
-call VecDestroy(output_vec_ptcldist_xv, global_ierr)
+call VecDestroy(output_vec_ptcldist_xv1, global_ierr)
+CHKERRQ(global_ierr)
+call VecDestroy(output_vec_ptcldist_xv2, global_ierr)
 CHKERRQ(global_ierr)
 call VecDestroy(output_vec_ptcldist_v, global_ierr)
 CHKERRQ(global_ierr)
