@@ -18,24 +18,58 @@ class OutputData:
         io = XPetscBinaryIO.XPetscBinaryIO()
         fdata = open(os.path.join(datapath, 'pic1dp.out'), 'rb')
 
+        # read parameters
+        self.nspecies, self.nmode, self.nx, self.nv = io.readInt(fdata, 4)
         self.lx, self.v_max = io.readReal(fdata, 2)
-        self.nx, self.nv = io.readInt(fdata, 2)
 
-        ptcldist = io.readBinaryFile(fdata)[0]
-        #print ptcldist
-        ptcldist.resize(self.nv, self.nx)
+        # read time dependent data
+        self.data = []
+        try: # read until EOF
+            while True:
+                rawdata = []
+                # scalars
+                rawdata.append(io.readReal(fdata, self.nspecies * 2 + 2))
+                # electric field Fourier components
+                header = io.readInt(fdata, 1)[0]
+                rawdata.append(io.readVec(fdata))
+                header = io.readInt(fdata, 1)[0]
+                rawdata.append(io.readVec(fdata))
+                # electric field and charge in x space
+                header = io.readInt(fdata, 1)[0]
+                rawdata.append(io.readVec(fdata))
+                header = io.readInt(fdata, 1)[0]
+                rawdata.append(io.readVec(fdata))
+                # distribution in x-v
+                for i in range(self.nspecies):
+                    for i in range(3):
+                        rawdata.append(io.readScalar(fdata, self.nx * self.nv))
 
-        self.ptcldist_xv = np.zeros((self.nv, self.nx + 1))
-        self.ptcldist_xv[:, 0 : self.nx] = ptcldist
-        self.ptcldist_xv[:, self.nx] = ptcldist[:, 0]
+                    for i in range(3):
+                        rawdata.append(io.readScalar(fdata, self.nv))
+
+                self.data.append(rawdata)
+        except (MemoryError, IndexError):
+            pass
+
+        self.ntime = len(self.data)
+        print '# of time steps read:', self.ntime
+        
+        self.scalar_t = np.zeros((self.nspecies * 2 + 2))
+        for itime in range(self.ntime):
+            rawdata = data[itime]
+            self.scalar_t[:, itime] = rawdata[0]
+
+#        self.ptcldist_xv = np.zeros((self.nv, self.nx + 1))
+#        self.ptcldist_xv[:, 0 : self.nx] = ptcldist
+#        self.ptcldist_xv[:, self.nx] = ptcldist[:, 0]
         #print self.ptcldist_xv
 
-        self.x = np.arange(self.nx + 1.0) / self.nx * self.lx
-        self.v = (np.arange(self.nv + 0.0) / (self.nv - 1) - 0.5) * 2.0 * self.v_max
-        self.xv = np.meshgrid(self.x, self.v)
-        print self.x
-        print self.v
-        print self.xv
+#        self.x = np.arange(self.nx + 1.0) / self.nx * self.lx
+#        self.v = (np.arange(self.nv + 0.0) / (self.nv - 1) - 0.5) * 2.0 * self.v_max
+#        self.xv = np.meshgrid(self.x, self.v)
+#        print self.x
+#        print self.v
+#        print self.xv
 
     def getptcldist():
         pass
