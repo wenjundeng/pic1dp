@@ -25,9 +25,6 @@ PetscInt, parameter :: &
 PetscInt :: nrk ! # of Runge-Kutta sub-steps
 PetscInt :: irk ! indexing Runge-Kutta sub-steps
 
-PetscInt :: itime ! indexing time step
-PetscReal :: time ! physical time
-
 ! termination related variables
 PetscInt :: itermination ! status of termination condition: 0: not to terminate; 1: to terminate
 
@@ -60,8 +57,8 @@ if (input_iptclshape < 4) then
   call wtimer_stop(iwt_particle_shape)
 end if
 
-itime = 0
-time = 0.0_kpr
+global_itime = 0
+global_time = 0.0_kpr
 
 ! solve initial field
 ! collect charges
@@ -75,13 +72,13 @@ call wtimer_stop(iwt_field_electric)
 
 ! output for 0th time step
 call wtimer_start(iwt_output)
-call output_all(itime, time)
+call output_all
 call wtimer_stop(iwt_output)
 
 !call field_test
 
 nrk = 2 ! 2-step 2nd-order Runge-Kutta
-itermination = check_termination(itime, time)
+itermination = check_termination()
 do while (itermination == 0)
   do irk = 1, nrk
     ! push particles
@@ -110,23 +107,23 @@ do while (itermination == 0)
     call wtimer_stop(iwt_field_electric)
   end do
   ! update time
-  itime = itime + 1
-  time = time + input_dt
+  global_itime = global_itime + 1
+  global_time = global_time + input_dt
 
   ! check if needs to terminate
-  itermination = check_termination(itime, time)
+  itermination = check_termination()
 
   ! output
   if ( &
     mod( &
-      time + PETSC_SQRT_MACHINE_EPSILON, input_output_interval &
+      global_time + PETSC_SQRT_MACHINE_EPSILON, input_output_interval &
     ) < mod( &
-      time + PETSc_SQRT_MACHINE_EPSILON - input_dt, input_output_interval &
+      global_time + PETSc_SQRT_MACHINE_EPSILON - input_dt, input_output_interval &
     ) & ! time just passed a full interval
     .or. itermination == 1 &
   ) then
     call wtimer_start(iwt_output)
-    call output_all(itime, time)
+    call output_all
     call wtimer_stop(iwt_output)
   end if
 end do
@@ -166,11 +163,13 @@ if (input_verbosity >= 1) then
     // string_wt(iwt_field_electric) // string_wt(iwt_output) // "\n")
 
   call global_pp( &
-    "     finalization                .                .                .\n")
+    "     finalization    MPI_Allreduce          scatter                .\n")
   call wtimer_print(iwt_final, string_wt(iwt_final), iwt_total, .true.)
-!  call wtimer_print(21, string_wt(21), iwt_total, .true.)
-!  call global_pp(string_wt(iwt_final) // string_wt(21) // "\n")
-  call global_pp(string_wt(iwt_final) // "\n")
+  call wtimer_print(21, string_wt(21), iwt_total, .true.)
+  call wtimer_print(22, string_wt(22), iwt_total, .true.)
+  call global_pp(string_wt(iwt_final) // &
+    string_wt(21) // string_wt(22) // "\n")
+!  call global_pp(string_wt(iwt_final) // "\n")
 end if
 
 call PetscFinalize(global_ierr)
@@ -182,17 +181,15 @@ contains
 ! check termination condition !
 ! return termination flag     !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-PetscInt function check_termination(itime, time)
+PetscInt function check_termination()
+use pic1dp_global
 use pic1dp_input
 implicit none
 #include "finclude/petsc.h90"
 
-PetscInt, intent(in) :: itime
-PetscReal, intent(in) :: time
-
 if ( &
-  itime >= input_ntime_max &
-  .or. time >= input_time_max &
+  global_itime >= input_ntime_max &
+  .or. global_time >= input_time_max &
 ) then
   check_termination = 1
 else

@@ -4,7 +4,9 @@ use pic1dp_input
 implicit none
 #include "finclude/petscdef.h"
 
-! particle x coordinate, velocity, p = f / g, w = delta f / g
+! particle x coordinate, velocity
+! equilibrium weight: p = f / g (nonlinear); p = f_0 / g (linear)
+! perturbed weight: w = delta f / g
 ! f is total distribution, delta f is perturbed distribution
 ! g is marker distribution
 Vec, dimension(input_nspecies) :: &
@@ -101,16 +103,10 @@ implicit none
 PetscInt :: ispecies
 
 PetscInt :: ip, imode
-!PetscInt, dimension(:), allocatable :: indexes
-!PetscScalar, dimension(:), allocatable :: values
 PetscScalar, dimension(:), pointer :: px, pv, pw
 
 call gaussian_init(input_seed_type, global_mype)
 
-!allocate (indexes(0 : particle_ip_high - particle_ip_low - 1))
-!allocate (values(0 : particle_ip_high - particle_ip_low - 1))
-!nindex = particle_ip_high - particle_ip_low
-!indexes = (/ (ip, ip = particle_ip_low, particle_ip_high - 1) /)
 do ispecies = 1, input_nspecies
   call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
@@ -122,25 +118,8 @@ do ispecies = 1, input_nspecies
   call gaussian_generate(pv)
   pv(:) = pv(:) * sqrt(input_temperature(ispecies) / input_mass(ispecies))
 
-!  call VecSetValues(particle_v(ispecies), nindex, indexes, values, &
-!    INSERT_VALUES, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call VecAssemblyBegin(particle_v(ispecies), global_ierr)
-!  CHKERRQ(global_ierr)
-
   call random_number(px)
-!  values = values * input_lx
   px(:) = px(:) * input_lx
-!  call VecSetValues(particle_x(ispecies), nindex, indexes, values, &
-!    INSERT_VALUES, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call VecAssemblyBegin(particle_x(ispecies), global_ierr)
-!  CHKERRQ(global_ierr)
-
-!  call VecAssemblyEnd(particle_v(ispecies), global_ierr)
-!  CHKERRQ(global_ierr)
-!  call VecAssemblyEnd(particle_x(ispecies), global_ierr)
-!  CHKERRQ(global_ierr)
 
   pw(:) = 0.0_kpr
   do imode = 0, input_init_nmode - 1
@@ -159,8 +138,10 @@ do ispecies = 1, input_nspecies
   call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
   CHKERRQ(global_ierr)
 
-  call VecSet(particle_p(ispecies), input_lx / input_nparticle, global_ierr)
+  call VecSet(particle_p(ispecies), input_lx / input_nparticle, \
+    global_ierr)
   CHKERRQ(global_ierr)
+  ! for linear, p = f_0 / g; for nonlinear, p = f / g
   if (input_linear == 0) then
     call VecAXPY(particle_p(ispecies), &
       1.0_kpr, particle_w(ispecies), global_ierr)
