@@ -12,6 +12,7 @@ contains
 subroutine interaction_collect_charge
 use pic1dp_global
 use pic1dp_input
+use wtimer
 implicit none
 #include "finclude/petsc.h90"
 
@@ -20,7 +21,7 @@ PetscScalar, dimension(:), pointer :: pw, pc, px
 PetscScalar :: sx
 
 if (input_iptclshape < 3) then
-  call VecSet(field_charge, 0.0_kpr, global_ierr)
+  call VecSet(field_chargeden, 0.0_kpr, global_ierr)
   CHKERRQ(global_ierr)
 
   do ispecies = 1, input_nspecies
@@ -29,9 +30,13 @@ if (input_iptclshape < 3) then
       field_tmp, global_ierr &
     )
     CHKERRQ(global_ierr)
-    call VecAXPY(field_charge, input_charge(ispecies), field_tmp, global_ierr)
+    call VecAXPY(field_chargeden, input_charge(ispecies), field_tmp, global_ierr)
     CHKERRQ(global_ierr)
   end do
+  ! at this point field_chargeden stores charge on a grid
+  ! now divide by grid size to get charge density
+  call VecScale(field_chargeden, input_nx / input_lx, global_ierr)
+  CHKERRQ(global_ierr)
 else
   ! first collect local portion of particle charges to field_arr_charge2
   field_arr_charge1 = 0.0_kpr
@@ -78,17 +83,19 @@ else
       + field_arr_charge1 * input_charge(ispecies)
   end do ! ispecies = 1, input_nspecies
 
+  call wtimer_start(21)
   ! then use MPI_Allreduce to get charges of all particles in field_arr_charge1
   call MPI_Allreduce(field_arr_charge2, field_arr_charge1, input_nx, &
     MPIU_SCALAR, MPI_SUM, MPI_COMM_WORLD, global_ierr)
+  call wtimer_stop(21)
 
-  ! copy values from field_arr_charge1 to field_charge
-  call VecGetArrayF90(field_charge, pc, global_ierr)
+  ! copy values from field_arr_charge1 to field_chargeden
+  call VecGetArrayF90(field_chargeden, pc, global_ierr)
   CHKERRQ(global_ierr)
   do ix = field_ix_low, field_ix_high - 1
-    pc(ix - field_ix_low + 1) = field_arr_charge1(ix)
+    pc(ix - field_ix_low + 1) = field_arr_charge1(ix) * input_nx / input_lx
   end do
-  call VecRestoreArrayF90(field_charge, pc, global_ierr)
+  call VecRestoreArrayF90(field_chargeden, pc, global_ierr)
   CHKERRQ(global_ierr)
 end if
 
@@ -101,6 +108,7 @@ end subroutine interaction_collect_charge
 subroutine interaction_push_particle(irk)
 use pic1dp_global
 use pic1dp_input
+use wtimer
 implicit none
 #include "finclude/petsc.h90"
 
@@ -128,6 +136,7 @@ else
   dt = input_dt
 end if
 
+call wtimer_start(22)
 if (input_iptclshape == 3 .or. input_iptclshape == 4) then
   call VecScatterBegin( &
     field_vs_electric, field_electric, field_electric_seq, &
@@ -142,6 +151,7 @@ if (input_iptclshape == 3 .or. input_iptclshape == 4) then
   call VecGetArrayF90(field_electric_seq, pe, global_ierr)
   CHKERRQ(global_ierr)
 end if
+call wtimer_stop(22)
 
 do ispecies = 1, input_nspecies
   ! calculate electric field at particle

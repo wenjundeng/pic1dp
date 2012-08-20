@@ -13,7 +13,7 @@ implicit none
 PetscInt, parameter :: input_ntime_max = 900000
 
 ! maximum physical time (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_time_max = 50.0_kpr
+PetscReal, parameter :: input_time_max = 100.0_kpr
 
 
 !!!!!!!!!!!!!!!!!!!!!!!
@@ -38,12 +38,12 @@ PetscReal, dimension(input_nspecies), parameter :: &
   input_temperature = (/ 1.0_kpr /)
 
 ! # of modes kept
-PetscInt, parameter :: input_nmode = 2
+PetscInt, parameter :: input_nmode = 1
 
 ! modes kept
 ! for each mode, the number here gives the # of mode periods in real space
 PetscInt, dimension(0 : input_nmode - 1), parameter :: &
-  input_mode = (/ 1, 2 /)
+  input_modes = (/ 1 /)
 
 
 !!!!!!!!!!!!!!!!!!!!!
@@ -101,10 +101,10 @@ PetscInt, parameter :: input_seed_type = 2
 PetscInt, parameter :: input_verbosity = 1
 
 ! time interval between data output (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_output_interval = 1.0_kpr
+PetscReal, parameter :: input_output_interval = 0.5_kpr
 
 ! # of velocity grid for output
-PetscInt, parameter :: input_output_nv = 64
+PetscInt, parameter :: input_output_nv = 128
 
 ! maximum velocity in output
 PetscReal, parameter :: input_output_v_max = 5.0_kpr

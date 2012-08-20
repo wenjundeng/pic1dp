@@ -5,7 +5,8 @@ use pic1dp_input
 implicit none
 #include "finclude/petscdef.h"
 
-Vec :: field_electric, field_electric_seq, field_charge
+! electric field and charge density
+Vec :: field_electric, field_electric_seq, field_chargeden
 Vec :: field_tmp
 
 ! for collecting charge and calculate electric field in Fourier space
@@ -52,7 +53,7 @@ CHKERRQ(global_ierr)
 call VecSetFromOptions(field_electric, global_ierr)
 CHKERRQ(global_ierr)
 
-call VecDuplicate(field_electric, field_charge, global_ierr)
+call VecDuplicate(field_electric, field_chargeden, global_ierr)
 CHKERRQ(global_ierr)
 call VecDuplicate(field_electric, field_tmp, global_ierr)
 CHKERRQ(global_ierr)
@@ -114,30 +115,8 @@ call VecScatterCreate(field_electric, field_is_electric, &
   field_electric_seq, field_is_electric_seq, field_vs_electric, global_ierr)
 CHKERRQ(global_ierr)
 
-
-! initialize electric field by initial condition
 call VecGetOwnershipRange(field_electric, field_ix_low, field_ix_high, global_ierr)
 CHKERRQ(global_ierr)
-!nindex = field_ix_high - field_ix_low
-!do ix = field_ix_low, field_ix_high - 1
-!  indexes(ix - field_ix_low) = ix
-!  values(ix - field_ix_low) = 0.0_kpr
-!  do imode = 0, input_init_nmode - 1
-!    values(ix - field_ix_low) = values(ix - field_ix_low) &
-!      + input_init_mode_cos(imode) * cos(2.0_kpr * PETSC_PI / input_nx &
-!        * real(input_init_mode(imode), kpr) * ix) &
-!      + input_init_mode_sin(imode) * sin(2.0_kpr * PETSC_PI / input_nx &
-!        * real(input_init_mode(imode), kpr) * ix)
-!  end do
-!end do
-!call VecSetValues(field_electric, nindex, indexes, values, &
-!  INSERT_VALUES, global_ierr)
-!CHKERRQ(global_ierr)
-!call VecAssemblyBegin(field_electric, global_ierr)
-!CHKERRQ(global_ierr)
-!call VecAssemblyEnd(field_electric, global_ierr)
-!CHKERRQ(global_ierr)
-
 
 ! initialize inverse grad operator in partial Fourier space
 call VecGetOwnershipRange(field_mode_grad_inv, &
@@ -147,7 +126,7 @@ nindex = field_imode_high - field_imode_low
 do imode = field_imode_low, field_imode_high - 1
   indexes(imode - field_imode_low) = imode
   values(imode - field_imode_low) &
-    = 1.0_kpr / (2.0_kpr * PETSC_PI / input_lx * input_mode(imode))
+    = 1.0_kpr / (2.0_kpr * PETSC_PI / input_lx * input_modes(imode))
 end do
 call VecSetValues(field_mode_grad_inv, nindex, indexes, values, &
   INSERT_VALUES, global_ierr)
@@ -168,7 +147,7 @@ end do
 do ix = field_ix_low, field_ix_high - 1
   do imode = 0, input_nmode - 1
     values(imode) = &
-      cos(2.0_kpr * PETSC_PI / input_nx * real(input_mode(imode), kpr) * ix)
+      cos(2.0_kpr * PETSC_PI / input_nx * real(input_modes(imode), kpr) * ix)
   end do
   call MatSetValues( &
     field_fourier_re, 1, ix, &
@@ -176,7 +155,7 @@ do ix = field_ix_low, field_ix_high - 1
   )
   do imode = 0, input_nmode - 1
     values(imode) = &
-      -sin(2.0_kpr * PETSC_PI / input_nx * real(input_mode(imode), kpr) * ix)
+      -sin(2.0_kpr * PETSC_PI / input_nx * real(input_modes(imode), kpr) * ix)
   end do
   call MatSetValues( &
     field_fourier_im, 1, ix, &
@@ -205,14 +184,15 @@ implicit none
 #include "finclude/petsc.h90"
 
 PetscInt :: m, n
+PetscReal :: norm2
 
 ! transform charge to partial Fourier space and scale by -i
-call MatMultTranspose(field_fourier_re, field_charge, &
+call MatMultTranspose(field_fourier_re, field_chargeden, &
   field_mode_im, global_ierr)
 CHKERRQ(global_ierr)
 call VecScale(field_mode_im, -1.0_kpr / input_nx, global_ierr)
 CHKERRQ(global_ierr)
-call MatMultTranspose(field_fourier_im, field_charge, &
+call MatMultTranspose(field_fourier_im, field_chargeden, &
   field_mode_re, global_ierr)
 CHKERRQ(global_ierr)
 call VecScale(field_mode_re, 1.0_kpr / input_nx, global_ierr)
@@ -235,6 +215,15 @@ CHKERRQ(global_ierr)
 call VecScale(field_electric, 2.0_kpr, global_ierr)
 CHKERRQ(global_ierr)
 
+!call VecNorm(field_chargeden, NORM_2, norm2, global_ierr)
+!CHKERRQ(global_ierr)
+!write (global_msg, *) "norm2 of charge=", norm2, "\n"
+!call global_pp(global_msg)
+!call VecNorm(field_electric, NORM_2, norm2, global_ierr)
+!CHKERRQ(global_ierr)
+!write (global_msg, *) "norm2 of electric=", norm2, "\n"
+!call global_pp(global_msg)
+
 end subroutine field_solve_electric
 
 
@@ -251,22 +240,20 @@ PetscInt :: ix, nindex
 PetscInt, dimension(0 : input_nx - 1) :: indexes
 PetscScalar, dimension(0 : input_nx - 1) :: values
 
-!call VecGetOwnershipRange(field_charge, ix_low, ix_high, global_ierr)
-!CHKERRQ(global_ierr)
 nindex = field_ix_high - field_ix_low
 do ix = field_ix_low, field_ix_high - 1
   indexes(ix - field_ix_low) = ix
   values(ix - field_ix_low) = cos(2.0_kpr * PETSC_PI * ix / real(input_nx, kpr))
 end do
-call VecSetValues(field_charge, nindex, indexes, values, &
+call VecSetValues(field_chargeden, nindex, indexes, values, &
   INSERT_VALUES, global_ierr)
 CHKERRQ(global_ierr)
-call VecAssemblyBegin(field_charge, global_ierr)
+call VecAssemblyBegin(field_chargeden, global_ierr)
 CHKERRQ(global_ierr)
-call VecAssemblyEnd(field_charge, global_ierr)
+call VecAssemblyEnd(field_chargeden, global_ierr)
 CHKERRQ(global_ierr)
 
-!call VecView(field_charge, PETSC_VIEWER_STDOUT_WORLD, global_ierr)
+!call VecView(field_chargeden, PETSC_VIEWER_STDOUT_WORLD, global_ierr)
 !CHKERRQ(global_ierr)
 !call MatView(field_fourier_re, PETSC_VIEWER_STDOUT_WORLD, global_ierr)
 !CHKERRQ(global_ierr)
@@ -289,7 +276,7 @@ implicit none
 
 call VecDestroy(field_electric, global_ierr)
 CHKERRQ(global_ierr)
-call VecDestroy(field_charge, global_ierr)
+call VecDestroy(field_chargeden, global_ierr)
 CHKERRQ(global_ierr)
 call VecDestroy(field_tmp, global_ierr)
 CHKERRQ(global_ierr)

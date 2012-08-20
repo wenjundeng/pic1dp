@@ -20,6 +20,9 @@ PetscInt :: global_mype ! rank of current MPI process
 PetscErrorCode :: global_ierr ! for storing MPI and PETSc error code
 character(len = 5000) :: global_msg ! for messages and temporary strings
 
+PetscInt :: global_itime ! indexing time step
+PetscReal :: global_time ! physical time
+
 contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!

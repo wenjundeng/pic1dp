@@ -58,7 +58,7 @@ intbuf(2) = input_nmode
 intbuf(3) = input_nx
 intbuf(4) = input_output_nv
 do iparameter = 5, 4 + input_nmode
-  intbuf(iparameter) = input_mode(iparameter - 5)
+  intbuf(iparameter) = input_modes(iparameter - 5)
 end do
 call PetscViewerBinaryWriteInt(output_viewer, intbuf, nintparameter, &
   PETSC_TRUE, global_ierr)
@@ -86,18 +86,20 @@ implicit none
 PetscReal, intent(out) :: electric_energe
 
 ! # of scalars for output
-! electric energe + total and perturbed kinetic energe for each species
-PetscInt, parameter :: nscalar = 1 + input_nspecies * 2
+! electric energe + marker, total and perturbed kinetic energe for each species
+PetscInt, parameter :: nscalar = 2 + input_nspecies * 3
 
 PetscInt :: ispecies
 PetscReal :: energe
 PetscReal, dimension(nscalar) :: realbuf
 
+realbuf(1) = global_time
+
 ! output E^2 (electric energe) and particle kinetic energe
 call VecNorm(field_electric, NORM_2, energe, global_ierr)
 CHKERRQ(global_ierr)
 energe = energe * energe
-realbuf(1) = energe
+realbuf(2) = energe
 electric_energe = energe
 
 do ispecies = 1, input_nspecies
@@ -106,13 +108,18 @@ do ispecies = 1, input_nspecies
     particle_v(ispecies), particle_v(ispecies), global_ierr)
   CHKERRQ(global_ierr)
 
+  ! calculate sum(v*v) to get marker energe
+  call VecSum(particle_tmp1, energe, global_ierr)
+  CHKERRQ(global_ierr)
+  realbuf(ispecies * 3) = energe
+
   ! calculate sum(v*v*p) to get total energe
   call VecPointwiseMult(particle_tmp2, &
     particle_tmp1, particle_p(ispecies), global_ierr)
   CHKERRQ(global_ierr)
   call VecSum(particle_tmp2, energe, global_ierr)
   CHKERRQ(global_ierr)
-  realbuf(ispecies * 2) = energe
+  realbuf(ispecies * 3 + 1) = energe
 
   ! calculate sum(v*v*w) to get perturbed energe
   call VecPointwiseMult(particle_tmp2, &
@@ -120,7 +127,7 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
   call VecSum(particle_tmp2, energe, global_ierr)
   CHKERRQ(global_ierr)
-  realbuf(ispecies * 2 + 1) = energe
+  realbuf(ispecies * 3 + 2) = energe
 end do
 call PetscViewerBinaryWriteReal(output_viewer, realbuf, nscalar, &
   PETSC_TRUE, global_ierr)
@@ -135,7 +142,7 @@ CHKERRQ(global_ierr)
 ! output electric field and charge in x space
 call VecView(field_electric, output_viewer, global_ierr)
 CHKERRQ(global_ierr)
-call VecView(field_charge, output_viewer, global_ierr)
+call VecView(field_chargeden, output_viewer, global_ierr)
 CHKERRQ(global_ierr)
 
 end subroutine output_field
@@ -147,19 +154,24 @@ end subroutine output_field
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine output_ptcldist
 use pic1dp_global
+use pic1dp_input
 use pic1dp_particle
 implicit none
 #include "finclude/petsc.h90"
+
+PetscScalar, parameter :: delv_inv &
+  = (input_output_nv - 1) / 2.0_kpr * input_output_v_max
+PetscScalar, parameter :: delx_inv = input_nx / input_lx
 
 PetscInt :: ispecies, ip, ix, iv
 PetscScalar :: sx, sv
 PetscScalar, dimension(:), pointer :: px, pv, pp, pw
 PetscScalar, dimension(0 : input_nx * input_output_nv - 1) :: &
-  ptcldist_total_xv, ptcldist_pertb_xv, &
-  ptcldist_total_xv_redu, ptcldist_pertb_xv_redu
+  ptcldist_markr_xv, ptcldist_total_xv, ptcldist_pertb_xv, &
+  ptcldist_markr_xv_redu, ptcldist_total_xv_redu, ptcldist_pertb_xv_redu
 PetscScalar, dimension(0 : input_output_nv - 1) :: &
-  ptcldist_total_v, ptcldist_pertb_v, &
-  ptcldist_total_v_redu, ptcldist_pertb_v_redu
+  ptcldist_markr_v, ptcldist_total_v, ptcldist_pertb_v, &
+  ptcldist_markr_v_redu, ptcldist_total_v_redu, ptcldist_pertb_v_redu
 
 ! calculate shape matrix in x-v plane (too slow, no longer used)
 !call particle_compute_shape_xv
@@ -180,8 +192,10 @@ do ispecies = 1, input_nspecies
 !  CHKERRQ(global_ierr)
 
 
+  ptcldist_markr_xv = 0.0_kpr
   ptcldist_total_xv = 0.0_kpr
   ptcldist_pertb_xv = 0.0_kpr
+  ptcldist_markr_v = 0.0_kpr
   ptcldist_total_v = 0.0_kpr
   ptcldist_pertb_v = 0.0_kpr
 
@@ -208,12 +222,18 @@ do ispecies = 1, input_nspecies
     iv = floor(sv)
     sv = 1.0_kpr - (sv - real(iv, kpr))
 
+    ptcldist_markr_xv(iv * input_nx + ix) &
+      = ptcldist_markr_xv(iv * input_nx + ix) &
+      + sx * sv
     ptcldist_total_xv(iv * input_nx + ix) &
       = ptcldist_total_xv(iv * input_nx + ix) &
       + sx * sv * pp(ip - particle_ip_low + 1)
     ptcldist_pertb_xv(iv * input_nx + ix) &
       = ptcldist_pertb_xv(iv * input_nx + ix) &
       + sx * sv * pw(ip - particle_ip_low + 1)
+    ptcldist_markr_xv((iv + 1) * input_nx + ix) &
+      = ptcldist_markr_xv((iv + 1) * input_nx + ix) &
+      + sx * (1.0_kpr - sv)
     ptcldist_total_xv((iv + 1) * input_nx + ix) &
       = ptcldist_total_xv((iv + 1) * input_nx + ix) &
       + sx * (1.0_kpr - sv) * pp(ip - particle_ip_low + 1)
@@ -223,12 +243,18 @@ do ispecies = 1, input_nspecies
     ix = ix + 1
     if (ix > input_nx - 1) ix = 0
     sx = 1.0_kpr - sx
+    ptcldist_markr_xv(iv * input_nx + ix) &
+      = ptcldist_markr_xv(iv * input_nx + ix) &
+      + sx * sv
     ptcldist_total_xv(iv * input_nx + ix) &
       = ptcldist_total_xv(iv * input_nx + ix) &
       + sx * sv * pp(ip - particle_ip_low + 1)
     ptcldist_pertb_xv(iv * input_nx + ix) &
       = ptcldist_pertb_xv(iv * input_nx + ix) &
       + sx * sv * pw(ip - particle_ip_low + 1)
+    ptcldist_markr_xv((iv + 1) * input_nx + ix) &
+      = ptcldist_markr_xv((iv + 1) * input_nx + ix) &
+      + sx * (1.0_kpr - sv)
     ptcldist_total_xv((iv + 1) * input_nx + ix) &
       = ptcldist_total_xv((iv + 1) * input_nx + ix) &
       + sx * (1.0_kpr - sv) * pp(ip - particle_ip_low + 1)
@@ -236,16 +262,18 @@ do ispecies = 1, input_nspecies
       = ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
       + sx * (1.0_kpr - sv) * pw(ip - particle_ip_low + 1)
 
+    ptcldist_markr_v(iv) = ptcldist_markr_v(iv) + sv
     ptcldist_total_v(iv) = ptcldist_total_v(iv) &
       + sv * pp(ip - particle_ip_low + 1)
     ptcldist_pertb_v(iv) = ptcldist_pertb_v(iv) &
       + sv * pw(ip - particle_ip_low + 1)
+    ptcldist_markr_v(iv + 1) = ptcldist_markr_v(iv + 1) &
+      + (1.0_kpr - sv)
     ptcldist_total_v(iv + 1) = ptcldist_total_v(iv + 1) &
       + (1.0_kpr - sv) * pp(ip - particle_ip_low + 1)
     ptcldist_pertb_v(iv + 1) = ptcldist_pertb_v(iv + 1) &
       + (1.0_kpr - sv) * pw(ip - particle_ip_low + 1)
   end do
-  
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
   call VecRestoreArrayF90(particle_v(ispecies), pv, global_ierr)
@@ -255,12 +283,33 @@ do ispecies = 1, input_nspecies
   call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
   CHKERRQ(global_ierr)
 
+  ! if linear, p = f_0 / g, needs to add perturbed dist. to get total dist.
+  if (input_linear == 1) then
+    ptcldist_total_xv = ptcldist_total_xv + ptcldist_pertb_xv
+    ptcldist_total_v = ptcldist_total_v + ptcldist_pertb_v
+  end if
+  ! divide by grid size to get actual distribution function
+  ptcldist_markr_xv = ptcldist_markr_xv * delx_inv * delv_inv
+  ptcldist_total_xv = ptcldist_total_xv * delx_inv * delv_inv
+  ptcldist_pertb_xv = ptcldist_pertb_xv * delx_inv * delv_inv
+  ptcldist_markr_v = ptcldist_markr_v * delv_inv
+  ptcldist_total_v = ptcldist_total_v * delv_inv
+  ptcldist_pertb_v = ptcldist_pertb_v * delv_inv
+
+  call MPI_Reduce(ptcldist_markr_xv, ptcldist_markr_xv_redu, &
+    input_nx * input_output_nv, MPIU_SCALAR, MPI_SUM, 0, &
+    MPI_COMM_WORLD, global_ierr)
+  CHKERRQ(global_ierr)
   call MPI_Reduce(ptcldist_total_xv, ptcldist_total_xv_redu, &
     input_nx * input_output_nv, MPIU_SCALAR, MPI_SUM, 0, &
     MPI_COMM_WORLD, global_ierr)
   CHKERRQ(global_ierr)
   call MPI_Reduce(ptcldist_pertb_xv, ptcldist_pertb_xv_redu, &
     input_nx * input_output_nv, MPIU_SCALAR, MPI_SUM, 0, &
+    MPI_COMM_WORLD, global_ierr)
+  CHKERRQ(global_ierr)
+  call MPI_Reduce(ptcldist_markr_v, ptcldist_markr_v_redu, &
+    input_output_nv, MPIU_SCALAR, MPI_SUM, 0, &
     MPI_COMM_WORLD, global_ierr)
   CHKERRQ(global_ierr)
   call MPI_Reduce(ptcldist_total_v, ptcldist_total_v_redu, &
@@ -272,11 +321,17 @@ do ispecies = 1, input_nspecies
     MPI_COMM_WORLD, global_ierr)
   CHKERRQ(global_ierr)
 
+  call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_markr_xv_redu, &
+    input_nx * input_output_nv, PETSC_TRUE, global_ierr)
+  CHKERRQ(global_ierr)
   call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_total_xv_redu, &
     input_nx * input_output_nv, PETSC_TRUE, global_ierr)
   CHKERRQ(global_ierr)
   call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_pertb_xv_redu, &
     input_nx * input_output_nv, PETSC_TRUE, global_ierr)
+  CHKERRQ(global_ierr)
+  call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_markr_v_redu, &
+    input_output_nv, PETSC_TRUE, global_ierr)
   CHKERRQ(global_ierr)
   call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_total_v_redu, &
     input_output_nv, PETSC_TRUE, global_ierr)
@@ -326,22 +381,21 @@ end subroutine output_ptcldist_v
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! output progress information to stdout !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine output_progress(itime, time, electric_energe)
+subroutine output_progress(electric_energe)
 use pic1dp_global
 use pic1dp_input
 implicit none
 #include "finclude/petsc.h90"
 
-PetscInt, intent(in) :: itime
-PetscReal, intent(in) :: time, electric_energe
+PetscReal, intent(in) :: electric_energe
 
 PetscReal, dimension(2) :: progress ! 1: itime, 2: time
 PetscInt :: iprogress
 character :: cprogress
 
 if (input_verbosity == 1) then
-  progress(1) = 1e2_kpr * real(itime, kpr) / input_ntime_max
-  progress(2) = 1e2_kpr * time / input_time_max
+  progress(1) = 1e2_kpr * real(global_itime, kpr) / input_ntime_max
+  progress(2) = 1e2_kpr * global_time / input_time_max
   iprogress = maxloc(progress, 1)
   if (iprogress == 1) then
     cprogress = 'i'
@@ -349,11 +403,11 @@ if (input_verbosity == 1) then
     cprogress = 't'
   end if
   write (global_msg, '(a, f5.1, a, i7, f9.3, es11.2e3, a)') &
-    cprogress, progress(iprogress), "%%", itime, time, electric_energe, "\n"
+    cprogress, progress(iprogress), "%%", global_itime, global_time, electric_energe, "\n"
   call global_pp(global_msg)
 elseif (input_verbosity >= 2) then
-  write (global_msg, '(a, i7, a, f9.3, a)') 'Info: finished itime = ', itime, &
-    ', time = ', time, "\n"
+  write (global_msg, '(a, i7, a, f9.3, a)') 'Info: finished itime = ', global_itime, &
+    ', time = ', global_time, "\n"
   call global_pp(global_msg)
 end if
 end subroutine output_progress
@@ -362,19 +416,16 @@ end subroutine output_progress
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! output all needed quantities !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine output_all(itime, time)
+subroutine output_all
 use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
-
-PetscInt, intent(in) :: itime
-PetscReal, intent(in) :: time
 
 PetscReal :: electric_energe
 
 call output_field(electric_energe)
 call output_ptcldist
-call output_progress(itime, time, electric_energe)
+call output_progress(electric_energe)
 
 end subroutine output_all
 
