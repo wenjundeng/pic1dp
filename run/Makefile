@@ -16,42 +16,34 @@
 # along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
 
 
-# Makefile for compiling and running PIC1D-PETSc
-
-# MPI Fortran 90 compiler
-MPIF90 := mpif90
-
-# compiling options
-FFLAGS := -O2
+# Makefile for launching PIC1D-PETSc
 
 # MPI executor
-MPIEXEC := mpiexec
+ifndef MPIEXEC
+	MPIEXEC := mpiexec
+endif
 
 # number of processes to build (compile) PIC1D-PETSc
-NPE_BUILD := 4
+ifndef NPE_BUILD
+	NPE_BUILD := 4
+endif
 
 # number of MPI processes to run PIC1D-PETSc
-NPE_RUN := 4
+ifndef NPE_RUN
+	NPE_RUN := 4
+endif
 
-export
+.PHONY : run clean
 
-.PHONY : build run visual cleanbuild cleanrun
+run : pic1dp clean
+	${MPIEXEC} -n ${NPE_RUN} ./$< 2>&1 | tee $<.log
 
-build : build/pic1dp
+pic1dp : ../build/pic1dp
+	cp ../build/pic1dp ./
 
-build/pic1dp : $(wildcard src/*)
-	${MAKE} -C ./build -j ${NPE_BUILD} build
+../build/pic1dp : $(wildcard ../src/*)
+	${MAKE} -C ../build -j ${NPE_BUILD} build
 
-run : build/pic1dp
-	#cp build/pic1dp run/pic1dp
-	${MAKE} -C ./run run
-
-visual :
-	./visual/visual.py ./run
-
-cleanbuild :
-	${MAKE} -C ./build clean
-
-cleanrun :
-	${MAKE} -C ./run clean
+clean :
+	rm -f pic1dp.log pic1dp.out pic1dp.out.info
 

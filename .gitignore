@@ -4,6 +4,7 @@ build/pic1dp
 
 run/pic1dp
 run/pic1dp.log
+run/*.out*
 
 visual/*.pyc
 
