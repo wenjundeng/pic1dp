@@ -1,3 +1,21 @@
+! Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+!
+! This file is part of PIC1D-PETSc
+!
+! PIC1D-PETSc is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! PIC1D-PETSc is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
+
+
 ! PIC1D-PETSc
 program pic1dp
 use wtimer
@@ -70,6 +88,11 @@ call wtimer_start(iwt_field_electric)
 call field_solve_electric
 call wtimer_stop(iwt_field_electric)
 
+if (input_verbosity == 1) then
+  call global_pp("Info: progress:\n")
+  call global_pp("progrss  itime     time    sum E^2\n")
+end if
+
 ! output for 0th time step
 call wtimer_start(iwt_output)
 call output_all
@@ -139,7 +162,7 @@ call wtimer_stop(iwt_total) ! stop recording total time
 
 ! print timers
 if (input_verbosity >= 1) then
-  call global_pp("[Info] timers:\n")
+  call global_pp("Info: timers:\n")
   call global_pp( &
     "            total   initialization    particle load    push particle\n")
   call wtimer_print(iwt_total, string_wt(iwt_total), iwt_total, .true.)

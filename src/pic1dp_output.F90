@@ -1,3 +1,22 @@
+! Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+!
+! This file is part of PIC1D-PETSc
+!
+! PIC1D-PETSc is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! PIC1D-PETSc is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
+
+
+! module for managing output
 module pic1dp_output
 implicit none
 #include "finclude/petscdef.h"
@@ -65,7 +84,7 @@ call PetscViewerBinaryWriteInt(output_viewer, intbuf, nintparameter, &
 CHKERRQ(global_ierr)
 
 realbuf(1) = input_lx
-realbuf(2) = input_output_v_max
+realbuf(2) = input_v_max
 call PetscViewerBinaryWriteReal(output_viewer, realbuf, nrealparameter, &
   PETSC_TRUE, global_ierr)
 CHKERRQ(global_ierr)
@@ -160,7 +179,7 @@ implicit none
 #include "finclude/petsc.h90"
 
 PetscScalar, parameter :: delv_inv &
-  = (input_output_nv - 1) / 2.0_kpr * input_output_v_max
+  = (input_output_nv - 1) / 2.0_kpr * input_v_max
 PetscScalar, parameter :: delx_inv = input_nx / input_lx
 
 PetscInt :: ispecies, ip, ix, iv
@@ -208,17 +227,16 @@ do ispecies = 1, input_nspecies
   call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
   CHKERRQ(global_ierr)
 
-  do ip = particle_ip_low, particle_ip_high
-    if (pv(ip - particle_ip_low + 1) <= -input_output_v_max &
-      .or. pv(ip - particle_ip_low + 1) >= input_output_v_max &
-    ) cycle
+  do ip = particle_ip_low, particle_ip_high - 1
+    ! if particle speed is out of v_max, ignore this particle
+    if (abs(pv(ip - particle_ip_low + 1)) >= input_v_max) cycle
 
     sx = px(ip - particle_ip_low + 1) / input_lx * input_nx
     ix = floor(sx)
     sx = 1.0_kpr - (sx - real(ix, kpr))
 
-    sv = (pv(ip - particle_ip_low + 1) + input_output_v_max) &
-      / (input_output_v_max * 2.0_kpr) * (input_output_nv - 1)
+    sv = (pv(ip - particle_ip_low + 1) + input_v_max) &
+      / (input_v_max * 2.0_kpr) * (input_output_nv - 1)
     iv = floor(sv)
     sv = 1.0_kpr - (sv - real(iv, kpr))
 
