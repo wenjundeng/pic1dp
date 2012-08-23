@@ -1,4 +1,22 @@
-! manage particles
+! Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+!
+! This file is part of PIC1D-PETSc
+!
+! PIC1D-PETSc is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! PIC1D-PETSc is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
+
+
+! module for managing marker particles
 module pic1dp_particle
 use pic1dp_input
 implicit none
@@ -103,7 +121,7 @@ implicit none
 PetscInt :: ispecies
 
 PetscInt :: ip, imode
-PetscScalar, dimension(:), pointer :: px, pv, pw
+PetscScalar, dimension(:), pointer :: px, pv, pp, pw
 
 call gaussian_init(input_seed_type, global_mype)
 
@@ -112,11 +130,24 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
   call VecGetArrayF90(particle_v(ispecies), pv, global_ierr)
   CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_p(ispecies), pp, global_ierr)
+  CHKERRQ(global_ierr)
   call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
   CHKERRQ(global_ierr)
 
-  call gaussian_generate(pv)
-  pv(:) = pv(:) * sqrt(input_temperature(ispecies) / input_mass(ispecies))
+  if (input_imarker == 1) then ! Maxwellian in velocity space
+    call gaussian_generate(pv)
+    pv(:) = pv(:) * sqrt(input_temperature(ispecies) / input_mass(ispecies))
+    pp(:) = input_lx / input_nparticle
+  else ! input_imarker == 2, uniform in velocity space
+    call random_number(pv)
+    pv(:) = (pv(:) - 0.5_kpr) * 2.0_kpr * input_v_max
+    pp(:) = input_lx / input_nparticle * exp(-pv(:)**2 &
+      / (2.0_kpr * input_temperature(ispecies) / input_mass(ispecies))) &
+      / sqrt(2.0_kpr * PETSC_PI &
+      * input_temperature(ispecies) / input_mass(ispecies)) &
+      * 2.0_kpr * input_v_max
+  end if
 
   call random_number(px)
   px(:) = px(:) * input_lx
@@ -129,28 +160,28 @@ do ispecies = 1, input_nspecies
       + input_init_mode_sin(imode) * sin(2.0_kpr * PETSC_PI / input_lx &
         * real(input_init_mode(imode), kpr) * px(:))
   end do
-  pw(:) = pw(:) * input_lx / input_nparticle
+  do ip = particle_ip_low, particle_ip_high - 1
+    pw(ip - particle_ip_low + 1) = pw(ip - particle_ip_low + 1) &
+      * input_lx / input_nparticle &
+      * input_pertb_shape(pv(ip - particle_ip_low + 1))
+  end do
 
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
   call VecRestoreArrayF90(particle_v(ispecies), pv, global_ierr)
   CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_p(ispecies), pp, global_ierr)
+  CHKERRQ(global_ierr)
   call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
   CHKERRQ(global_ierr)
 
-  call VecSet(particle_p(ispecies), input_lx / input_nparticle, \
-    global_ierr)
-  CHKERRQ(global_ierr)
   ! for linear, p = f_0 / g; for nonlinear, p = f / g
   if (input_linear == 0) then
     call VecAXPY(particle_p(ispecies), &
       1.0_kpr, particle_w(ispecies), global_ierr)
     CHKERRQ(global_ierr)
   end if
-!  call VecSet(particle_w(ispecies), 0.0_kpr, global_ierr)
-!  CHKERRQ(global_ierr)
 end do
-!deallocate (indexes, values)
 
 !  call VecView(particle_x(1), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
 !  CHKERRQ(global_ierr)
@@ -175,16 +206,12 @@ implicit none
 
 PetscInt :: ispecies, nindex
 PetscInt :: ip
-!PetscInt :: ip_low1, ip_high1
 PetscInt :: ix1, ix2, iv, ixv
 PetscScalar :: sx, sv
 PetscScalar, dimension(:), pointer :: px, pv
 PetscInt, dimension(0 : 3) :: indexes
 PetscScalar, dimension(0 : 3) :: values
 
-
-!call VecGetOwnershipRange(particle_x(1), ip_low, ip_high, global_ierr)
-!CHKERRQ(global_ierr)
 
 do ispecies = 1, input_nspecies
 !  call MatDestroy(particle_shape_xv(ispecies), global_ierr)
@@ -198,10 +225,7 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
 
   do ip = particle_ip_low, particle_ip_high - 1
-    if ( &
-      pv(ip - particle_ip_low + 1) <= -input_output_v_max &
-      .or. pv(ip - particle_ip_low + 1) >= input_output_v_max &
-    ) cycle
+    if (abs(pv(ip - particle_ip_low + 1)) >= input_v_max) cycle
 
     sx = px(ip - particle_ip_low + 1) / input_lx * input_nx
     ix1 = floor(sx)
@@ -209,8 +233,8 @@ do ispecies = 1, input_nspecies
     ix2 = ix1 + 1
     if (ix2 == input_nx) ix2 = 0
 
-    sv = (pv(ip - particle_ip_low + 1) + input_output_v_max) &
-      / (input_output_v_max * 2.0_kpr) * (input_output_nv - 1)
+    sv = (pv(ip - particle_ip_low + 1) + input_v_max) &
+      / (input_v_max * 2.0_kpr) * (input_output_nv - 1)
     iv = floor(sv)
     sv = sv - real(iv, kpr)
 
@@ -371,14 +395,11 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
 
   do ip = particle_ip_low, particle_ip_high - 1
-    ! if particle velocity out of output_v_max, ignore this particle
-    if ( &
-      pv(ip - particle_ip_low + 1) <= -input_output_v_max &
-      .or. pv(ip - particle_ip_low + 1) >= input_output_v_max &
-    ) cycle
+    ! if particle velocity out of v_max, ignore this particle
+    if (abs(pv(ip - particle_ip_low + 1)) >= input_v_max) cycle
 
-    sv = (pv(ip - particle_ip_low + 1) + input_output_v_max) &
-      / (input_output_v_max * 2.0_kpr) * (input_output_nv - 1)
+    sv = (pv(ip - particle_ip_low + 1) + input_v_max) &
+      / (input_v_max * 2.0_kpr) * (input_output_nv - 1)
     iv = floor(sv)
     sv = sv - real(iv, kpr)
 

@@ -1,3 +1,21 @@
+! Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+!
+! This file is part of PIC1D-PETSc
+!
+! PIC1D-PETSc is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! PIC1D-PETSc is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
+
+
 ! PIC1D-PETSc
 program pic1dp
 use wtimer
@@ -9,6 +27,8 @@ use pic1dp_interaction
 use pic1dp_output
 implicit none
 #include "finclude/petsc.h90"
+
+character(len = 25), parameter :: version = '2012-07-22 19:33:37-04:00'
 
 ! wall clock timer indexes
 PetscInt, parameter :: &
@@ -41,7 +61,7 @@ call wtimer_start(iwt_total) ! start recording total time
 call wtimer_start(iwt_init)
 call MPI_Comm_rank(MPI_COMM_WORLD, global_mype, global_ierr)
 CHKERRQ(global_ierr)
-if (input_verbosity >= 1) call global_pp("PIC1D-PETSc\n")
+if (input_verbosity >= 1) call global_pp("PIC1D-PETSc version " // version // "\n")
 call particle_init
 call field_init
 call output_init
@@ -69,6 +89,11 @@ call wtimer_stop(iwt_collect_charge)
 call wtimer_start(iwt_field_electric)
 call field_solve_electric
 call wtimer_stop(iwt_field_electric)
+
+if (input_verbosity == 1) then
+  call global_pp("Info: progress:\n")
+  call global_pp("progrss  itime     time  int E^2 dx\n")
+end if
 
 ! output for 0th time step
 call wtimer_start(iwt_output)
@@ -139,7 +164,7 @@ call wtimer_stop(iwt_total) ! stop recording total time
 
 ! print timers
 if (input_verbosity >= 1) then
-  call global_pp("[Info] timers:\n")
+  call global_pp("Info: timers:\n")
   call global_pp( &
     "            total   initialization    particle load    push particle\n")
   call wtimer_print(iwt_total, string_wt(iwt_total), iwt_total, .true.)
