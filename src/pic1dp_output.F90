@@ -117,7 +117,7 @@ realbuf(1) = global_time
 ! output E^2 (electric energe) and particle kinetic energe
 call VecNorm(field_electric, NORM_2, energe, global_ierr)
 CHKERRQ(global_ierr)
-energe = energe * energe
+energe = energe * energe * input_lx / input_nx
 realbuf(2) = energe
 electric_energe = energe
 
@@ -420,7 +420,7 @@ if (input_verbosity == 1) then
   else
     cprogress = 't'
   end if
-  write (global_msg, '(a, f5.1, a, i7, f9.3, es11.2e3, a)') &
+  write (global_msg, '(a, f5.1, a, i7, f9.3, es12.3e3, a)') &
     cprogress, progress(iprogress), "%%", global_itime, global_time, electric_energe, "\n"
   call global_pp(global_msg)
 elseif (input_verbosity >= 2) then

@@ -28,6 +28,8 @@ use pic1dp_output
 implicit none
 #include "finclude/petsc.h90"
 
+character(len = 25), parameter :: version = '2012-07-22 19:33:37-04:00'
+
 ! wall clock timer indexes
 PetscInt, parameter :: &
   iwt_total = 1, &
@@ -59,7 +61,7 @@ call wtimer_start(iwt_total) ! start recording total time
 call wtimer_start(iwt_init)
 call MPI_Comm_rank(MPI_COMM_WORLD, global_mype, global_ierr)
 CHKERRQ(global_ierr)
-if (input_verbosity >= 1) call global_pp("PIC1D-PETSc\n")
+if (input_verbosity >= 1) call global_pp("PIC1D-PETSc version " // version // "\n")
 call particle_init
 call field_init
 call output_init
@@ -90,7 +92,7 @@ call wtimer_stop(iwt_field_electric)
 
 if (input_verbosity == 1) then
   call global_pp("Info: progress:\n")
-  call global_pp("progrss  itime     time    sum E^2\n")
+  call global_pp("progrss  itime     time  int E^2 dx\n")
 end if
 
 ! output for 0th time step
