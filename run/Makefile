@@ -36,13 +36,13 @@ endif
 .PHONY : run clean
 
 run : pic1dp clean
-	${MPIEXEC} -n ${NPE_RUN} ./$< 2>&1 | tee $<.log
+	$(MPIEXEC) -n $(NPE_RUN) ./$< 2>&1 | tee $<.log
 
 pic1dp : ../build/pic1dp
 	cp ../build/pic1dp ./
 
 ../build/pic1dp : $(wildcard ../src/*)
-	${MAKE} -C ../build -j ${NPE_BUILD} build
+	$(MAKE) -C ../build -j $(NPE_BUILD) build
 
 clean :
 	rm -f pic1dp.log pic1dp.out pic1dp.out.info
