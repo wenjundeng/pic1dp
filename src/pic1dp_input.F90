@@ -142,6 +142,9 @@ contains
 PetscScalar function input_pertb_shape(v)
 implicit none
 PetscScalar, intent(in) :: v
+
+!input_pertb_shape = v**30 * exp(-v * v) * 1e-8_kpr
+
 ! for constant 1.0, the perturbation shape is the same as the marker particle
 ! distribution in velocity space
 input_pertb_shape = 1.0_kpr

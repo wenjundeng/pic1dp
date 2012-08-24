@@ -33,7 +33,7 @@ PetscInt, parameter :: wtrk = kind(wtimer_testkind)
 PetscInt, parameter :: wtik = kind(wtrk)
 #else
 integer, parameter :: wtrk = selected_real_kind(10)
-integer, parameter :: wtik = selected_int_kind(10)
+integer, parameter :: wtik = selected_int_kind(5)
 #endif
 
 ! maximum # of timers

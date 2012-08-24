@@ -33,7 +33,7 @@ PetscInt, parameter :: grk = kind(gaussian_testkind)
 PetscInt, parameter :: gik = kind(grk)
 #else
 integer, parameter :: grk = selected_real_kind(10)
-integer, parameter :: gik = selected_int_kind(10)
+integer, parameter :: gik = selected_int_kind(5)
 #endif
 
 contains
@@ -50,8 +50,11 @@ integer(kind = gik), intent(in) :: seed_type
 ! same random number sequence
 integer(kind = gik), intent(in), optional :: mype
 
-integer(kind = gik) :: clock, iseed, nseed
-integer(kind = gik), dimension(:), allocatable :: seeds
+integer(kind = gik) :: clock, iseed
+
+! the following two variables need to be of default kind for random_seed()
+integer :: nseed
+integer, dimension(:), allocatable :: seeds
 
 ! initialize random number seeds
 call random_seed(size = nseed)
