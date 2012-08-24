@@ -1,9 +1,9 @@
 PIC1D-PETSc
 ===========
-version 2012-08-16 00:38:26-04:00
+version 2012-08-22 22:40:26-04:00
 ---------------------------------
 
-PIC1D-PETSc is a code simulating 1D electrostatic plasma by solving
+PIC1D-PETSc (pic1dp) is a code simulating 1D electrostatic plasma by solving
 Vlasov-Poisson equation using particle-in-cell (PIC) method.  PIC1D-PETSc is a
 reimplementation of Zhihong Lin's
 [PIC1D](http://phoenix.ps.uci.edu/zlin/pic1d/).  This reimplementation
@@ -128,13 +128,14 @@ before PIC1D-PETSc runs.  If you think the output files are useful, move them
 immediately to a safe place.**
 
 To run the visualization app, first make sure Python, NumPy, and matplotlib are
-installed correctly, then execute:
+installed correctly, then add `${PETSC_DIR}/bin/pythonscripts` to `PYTHONPATH`
+environment variable, and finally execute:
 
 	make visual
 
 Or alternatively you can execute `/visual/visual.py` directly.
 `/visual/visual.py` has one optional argument, which is the path of the output
-data.  If the argument is absent, it tries to read data from current directory.
+data.  If the argument is absent, it reads data from current directory.
 
 The visualization app shows 7 panels.  The left 4 show time history of various
 quantities.  The right 3 show quantities on a specific time.
