@@ -30,7 +30,7 @@ endif
 
 # number of MPI processes to run PIC1D-PETSc
 ifndef NPE_RUN
-	NPE_RUN := 32
+	NPE_RUN := 4
 endif
 
 .PHONY : run clean
