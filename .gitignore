@@ -1,6 +1,8 @@
+build/pic1dp
 build/*.o
 build/*.mod
-build/pic1dp
+build/*.d1
+build/*.d2
 
 run/pic1dp
 run/pic1dp.log
