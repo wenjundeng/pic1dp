@@ -1,6 +1,6 @@
 PIC1D-PETSc
 ===========
-version 2012-08-24 19:16:13-04:00
+version 2012-08-24 22:36:24-04:00
 ---------------------------------
 
 PIC1D-PETSc (pic1dp) is a code simulating 1D electrostatic plasma by solving
@@ -38,7 +38,18 @@ scalars.  PIC1D-PETSc has been tested with
 [OpenMPI](http://www.open-mpi.org/) 1.5 and PETSc 3.2.
 
 PIC1D-PETSc also requires a Fortran 90 compiler for compilation.  PIC1D-PETSc
-has been tested with [GNU Fortran](http://gcc.gnu.org/fortran/) 4.6.
+has been tested with [GNU Fortran](http://gcc.gnu.org/fortran/) 4.6.  [GNU core
+utilities](http://www.gnu.org/software/coreutils/) is required to use GNU make
+for automatic compilation.  Typical installation of any major GNU/Linux
+distribution has GNU core utilities pre-installed.
+
+Note that BSD-like systems, e.g., FreeBSD and Apple Mac OS X, have utilities
+similar to GNU core utilities, but they differ from the GNU version.  You need
+to install the GNU version of them if you want to compile PIC1D-PETSc using GNU
+make on BSD-like systems.  On Apple Mac OS X, GNU core utilities can be
+installed through [Fink](http://www.finkproject.org/) or
+[MacPorts](http://www.macports.org/).  You can also compile PIC1D-PETSc
+manually without using GNU make.
 
 The visualization app requires [Python](http://www.python.org/) 2.7+,
 [NumPy](http://numpy.scipy.org/) 1.4+ and

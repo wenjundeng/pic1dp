@@ -43,7 +43,7 @@ build : pic1dp
 # PETSc variables
 -include $(PETSC_DIR)/conf/variables
 
-# first layer depencency files .d1
+# first layer dependency files .d1
 -include $(MODOBJ:.o=.d1)
 
 # use GNU tools to build module dependency files .d1
@@ -53,9 +53,9 @@ build : pic1dp
 $(MODOBJ:.o=.d1) : %.d1 : $(SRCDIR)/%.F90
 	@echo 'making $@...'
 	@echo '-include $(@:.d1=.d2)' > $@
-	@echo -n '$(@:.d1=.d2) : $< ' >> $@
-	@sed -n 's/^[ \t]*use \([^ \t,]*\).*$$/\1.mod/p' $< | sort | uniq | paste -s --delimiters=" " >> $@
-	@echo -e '\t$$(MPIF90) $(FFLAGS) -MM $$< $$(FCPPFLAGS) > $$@' >> $@
+	@exec echo -n '$(@:.d1=.d2) : $< ' >> $@
+	@exec sed -n 's/^[ \t]*use \([^ \t,]*\).*$$/\1.mod/p' $< | sort | uniq | paste -s --delimiters=" " >> $@
+	@exec echo -e '\t$$(MPIF90) $(FFLAGS) -MM $$< $$(FCPPFLAGS) > $$@' >> $@
 	@echo 'finished making $@'
 
 # compile main program and link all modules
