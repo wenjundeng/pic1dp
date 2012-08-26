@@ -1,0 +1,165 @@
+% Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+%
+% This file is part of PIC1D-PETSc
+%
+% PIC1D-PETSc is free software: you can redistribute it and/or modify
+% it under the terms of the GNU General Public License as published by
+% the Free Software Foundation, either version 3 of the License, or
+% (at your option) any later version.
+%
+% PIC1D-PETSc is distributed in the hope that it will be useful,
+% but WITHOUT ANY WARRANTY; without even the implied warranty of
+% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+% GNU General Public License for more details.
+%
+% You should have received a copy of the GNU General Public License
+% along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
+
+
+\documentclass[12pt]{article}
+
+\usepackage[colorlinks,linkcolor=blue,citecolor=blue,bookmarks,%
+pdfstartview=FitH]{hyperref}
+
+% \Autoref is for the beginning of the sentence
+\let\orgautoref\autoref
+\providecommand{\Autoref}[1]
+{%
+    \def\equationautorefname{Equation}%
+    \def\figureautorefname{Figure}%
+    \def\subfigureautorefname{Figure}%
+    \def\sectionautorefname{Section}%
+    \orgautoref{#1}%
+}
+% \autoref is used inside the sentence to produce Fig., and Eq. for figures,
+% subfigures, and equations
+\renewcommand{\autoref}[1]
+{%
+    \def\equationautorefname{Eq.}%
+    \def\figureautorefname{Fig.}%
+    \def\subfigureautorefname{Fig.}%
+    \def\sectionautorefname{Sec.}%
+    \def\subsubsectionautorefname{Sec.}%
+    \orgautoref{#1}%
+}
+
+% Put parenthesis around equation numbers
+%\makeatletter
+%\def\tagform@#1{\maketag@@@{\ignorespaces#1\unskip\@@italiccorr}}
+%\let\orgtheequation\theequation
+%\def\theequation{(\orgtheequation)}
+%\makeatother
+
+\begin{document}
+\newcommand{\md}{\mathrm{d}}
+\newcommand{\me}{\mathrm{e}}
+
+\title{1D electrostatic $\delta f$ particle-in-cell (PIC) formulation in vector-matrix form}
+\author{Wenjun Deng}
+\date{2012-08-26 16:14:59-04:00}
+\maketitle
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{1D Vlasov-Poisson equations}
+
+\begin{eqnarray}
+	\frac{\md f_\alpha(x, v, t)}{\md t} & = & \partial_t f_\alpha(x, v, t) + v \partial_x f_\alpha(x, v, t) + \frac{Z_\alpha E(x, t)}{m_\alpha} \partial_v f_\alpha(x, v, t) \nonumber \\
+	& = & 0 \textrm{ ,} \\
+	\partial_x E(x, t) & = & 4 \pi \sum_\alpha Z_\alpha n_\alpha(x, t) \textrm{ ,} \\
+	n_\alpha(x, t) & \equiv & \int_{-\infty}^{\infty} f_\alpha(x, v, t) \md v \textrm{ .}
+\end{eqnarray}
+$\alpha$ indicates species.
+$f$ is particle distribution.
+$Z$ is charge.
+$m$ is mass.
+$n$ is density.
+$E$ is electrostatic field.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{$\delta f$ formulation}
+
+Decompose quantities into equilibrium part and perturbed part:
+\begin{eqnarray}
+	f_\alpha & = & f_{0 \alpha} + \delta f_\alpha \textrm{ ,} \\
+	n_\alpha & = & n_{0 \alpha} + \delta n_\alpha \textrm{ ,} \\
+	n_{0 \alpha} & \equiv & \int_{-\infty}^{\infty} f_{0 \alpha} \md v \textrm{ ,} \\
+	\delta n_{\alpha} & \equiv & \int_{-\infty}^{\infty} \delta f_{\alpha} \md v \textrm{ .}
+\end{eqnarray}
+Note that equilibrium electrostatic field is zero, $E$ is perturbed field.
+
+Assume equilibrium distribution is Maxwellian, which is time-independent and uniform in $x$:
+\begin{eqnarray}
+	f_{0 \alpha} & = & f_{0 \alpha}(v) = \frac{n_{0 \alpha}}{\sqrt{2 \pi v_{\mathrm{th}, \alpha}^2}} \exp \left( \frac{v^2}{2 v_{\mathrm{th}, \alpha}^2} \right) \textrm{ ,} \\
+	v_{\mathrm{th}, \alpha} & \equiv & \frac{T_\alpha}{m_\alpha} \textrm{ ,} \\
+	\partial_t f_{0 \alpha} & = & 0 \textrm{ ,} \\
+	\partial_x f_{0 \alpha} & = & 0 \textrm{ .}
+\end{eqnarray}
+
+$\delta f$ formulation:
+\begin{eqnarray}
+	\frac{\md}{\md t} \delta f & = & - \frac{\md}{\md t} f_0 \nonumber \\
+	& = & - \frac{Z_\alpha}{m_\alpha} E \partial_v f_{0 \alpha} \textrm{ ,} \\
+	\partial_x E & = & 4 \pi \sum_\alpha Z_\alpha \,\delta n_\alpha \textrm{ .}
+\end{eqnarray}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{$\delta f$ particle-in-cell (PIC) formulation}
+
+Physical particle distribution is carried by marker particles.
+Each marker particle carries 4 quantities in this case: $x$, $v$, $p$ and $w$.
+Marker particle equilibrium weight $p$ and perturbed weight $w$ are defined as:
+\begin{eqnarray}
+	p & \equiv & \frac{f_{0 \alpha}}{g_\alpha} \textrm{ ,} \\
+	w & \equiv & \frac{\delta f_\alpha}{g_\alpha} \textrm{ ,} \\
+\end{eqnarray}
+where $g$ is marker particle distribution function:
+\begin{equation}
+	g_\alpha(x, v, t) = \sum_{j_\alpha = 1}^{N_\alpha} S_x(x - x_{j_\alpha}) S_v(v - v_{j_\alpha}) \textrm{ .}
+\end{equation}
+$N_\alpha$ is number of marker particles for species $\alpha$.
+$j_\alpha$ is marker particle index.
+$x_{j_\alpha}$ and $v_{j_\alpha}$ are position and velocity of the $j_{\alpha}$-th marker particle, respectively.
+$S_x$ and $S_v$ are shape functions in $x$ and $v$, respectively.
+In this PIC formulation, take $S_v$ to be Dirac $\delta$ function and $S_x$ to be hat function:
+\begin{eqnarray}
+	S_v(v - v_{j_\alpha}) & = & \delta(v - v_{j_\alpha}) \textrm{ ,} \\
+	S_x(x - x_{j_\alpha}) & = & \left\{ \begin{array}{ll}
+		\frac{h_x - |x - x_{j_\alpha}|}{h_x^2} & |x - x_{j_\alpha}| < h_x \\
+		0 & \textrm{otherwise}
+	\end{array} \right. \textrm{ ,}
+\end{eqnarray}
+where $h_x$ is grid size in $x$.
+
+Physical particle distribution functions are given by:
+\begin{eqnarray}
+	f_\alpha(x, v, t) & = & \sum_{j_\alpha = 1}^{N_\alpha} p_{j_\alpha} S_x(x - x_{j_\alpha}) S_v(v - v_{j_\alpha}) \textrm{ ,} \\
+	\delta f_\alpha(x, v, t) & = & \sum_{j_\alpha = 1}^{N_\alpha} w_{j_\alpha} S_x(x - x_{j_\alpha}) S_v(v - v_{j_\alpha}) \textrm{ .}
+\end{eqnarray}
+
+Note that for Maxwellian:
+\begin{equation}
+	\frac{\partial_v f_{0 \alpha}}{f_{0 \alpha}} = - \frac{v}{v_{\mathrm{th}, \alpha}^2} = - \frac{v}{T_\alpha / m_\alpha} \textrm{ .}
+\end{equation}
+$\delta f$ PIC formulation:
+\begin{eqnarray}
+	\frac{\md x_{j_\alpha}}{\md t} & = & v_{j_\alpha} \textrm{ ,} \\
+	\frac{\md v_{j_\alpha}}{\md t} & = & \frac{Z_\alpha}{m_\alpha} E(x_{j_\alpha}) \textrm{ ,} \\
+	\frac{\md p_{j_\alpha}}{\md t} & = & 0 \textrm{ ,} \\
+	\frac{\md w_{j_\alpha}}{\md t} & = & - (p_{j_\alpha} - w_{j_\alpha}) \frac{Z_\alpha}{m_\alpha} E(x_{j_\alpha}) \frac{\partial_v f_{0 \alpha}}{f_{0 \alpha}} \nonumber \\
+	& = & (p_{j_\alpha} - w_{j_\alpha}) \frac{Z_\alpha}{T_\alpha} E(x_{j_\alpha}) v_{j_\alpha} \textrm{ ,} \\
+	\partial_x E(x_{j_x}) & = & 4 \pi \sum_\alpha \sum_{j_\alpha} w_{j_\alpha} S_x(x_{j_x} - x_{j_\alpha}) \textrm{ ,} \label{eq:poisson_df_pic} \\
+	E(x_{j_\alpha}) & = & E(x_{j_x}) S_x(x_{j_x} - x_{j_\alpha}) h_x \textrm{ .}
+\end{eqnarray}
+$j_x$ is index for grids in $x$.
+
+In this model, $x$ is periodic and the box size is $l$.
+\autoref{eq:poisson_df_pic} is solved by spectral method:
+\begin{eqnarray}
+	\rho(x_{j_x}) & = & \sum_\alpha \sum_{j_\alpha} w_{j_\alpha} S_x(x_{j_x} - x_{j_\alpha}) \textrm{ ,} \\
+\end{eqnarray}
+
+\end{document}
+
