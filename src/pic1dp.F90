@@ -28,7 +28,7 @@ use pic1dp_output
 implicit none
 #include "finclude/petsc.h90"
 
-character(len = 25), parameter :: version = '2012-08-24 18:49:11-04:00'
+character(len = 25), parameter :: version = '2012-08-24 22:36:24-04:00'
 
 ! wall clock timer indexes
 PetscInt, parameter :: &

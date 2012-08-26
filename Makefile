@@ -40,18 +40,18 @@ export
 build : build/pic1dp
 
 build/pic1dp : $(wildcard src/*)
-	${MAKE} -C ./build -j ${NPE_BUILD} build
+	$(MAKE) -C ./build -j $(NPE_BUILD) build
 
 run : build/pic1dp
 	#cp build/pic1dp run/pic1dp
-	${MAKE} -C ./run run
+	$(MAKE) -C ./run run
 
 visual :
 	./visual/visual.py ./run
 
 cleanbuild :
-	${MAKE} -C ./build clean
+	$(MAKE) -C ./build clean
 
 cleanrun :
-	${MAKE} -C ./run clean
+	$(MAKE) -C ./run clean
 
