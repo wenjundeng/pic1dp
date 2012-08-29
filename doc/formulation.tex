@@ -156,9 +156,12 @@ $\delta f$ PIC formulation:
 $j_x$ is index for grids in $x$.
 
 In this model, $x$ is periodic and the box size is $l$.
-\autoref{eq:poisson_df_pic} is solved by spectral method:
+\autoref{eq:poisson_df_pic} is solved by spectral method.
+The charge density is given by and expanded as Fourier harmonics:
 \begin{eqnarray}
-	\rho(x_{j_x}) & = & \sum_\alpha \sum_{j_\alpha} w_{j_\alpha} S_x(x_{j_x} - x_{j_\alpha}) \textrm{ ,} \\
+	\rho(x_{j_x}) & = & \sum_\alpha \sum_{j_\alpha} w_{j_\alpha} S_x(x_{j_x} - x_{j_\alpha}) \nonumber \\
+	& = & \sum_{j_k = -\infty}^{\infty} \rho_{j_k} \exp \left( i \frac{2 \pi}{l} j_k x \right) \nonumber \\
+	& = & \sum_{j_k = 1}^{\infty} \left[ \rho_{j_k} \exp \left( i \frac{2 \pi}{l} j_k x \right) + \rho_{j_k}^* \exp \left( -i \frac{2 \pi}{l} j_k x \right) \right] + \rho_0 \nonumber \\
 \end{eqnarray}
 
 \end{document}
