@@ -18,8 +18,8 @@
 
 \documentclass[12pt]{article}
 
-\usepackage[colorlinks,linkcolor=blue,citecolor=blue,bookmarks,%
-pdfstartview=FitH]{hyperref}
+\usepackage[colorlinks,linkcolor=blue,citecolor=blue,bookmarks,pdfstartview=FitH]{hyperref}
+\usepackage{amsmath} % necessary for correct parenthesis around equation number
 
 % \Autoref is for the beginning of the sentence
 \let\orgautoref\autoref
@@ -44,11 +44,11 @@ pdfstartview=FitH]{hyperref}
 }
 
 % Put parenthesis around equation numbers
-%\makeatletter
-%\def\tagform@#1{\maketag@@@{\ignorespaces#1\unskip\@@italiccorr}}
-%\let\orgtheequation\theequation
-%\def\theequation{(\orgtheequation)}
-%\makeatother
+\makeatletter
+\def\tagform@#1{\maketag@@@{\ignorespaces#1\unskip\@@italiccorr}}
+\let\orgtheequation\theequation
+\def\theequation{(\orgtheequation)}
+\makeatother
 
 \begin{document}
 \newcommand{\md}{\mathrm{d}}
@@ -107,6 +107,7 @@ $\delta f$ formulation:
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{$\delta f$ particle-in-cell (PIC) formulation}
+\label{sec:df_pic}
 
 Physical particle distribution is carried by marker particles.
 Each marker particle carries 4 quantities in this case: $x$, $v$, $p$ and $w$.
@@ -157,12 +158,107 @@ $j_x$ is index for grids in $x$.
 
 In this model, $x$ is periodic and the box size is $l$.
 \autoref{eq:poisson_df_pic} is solved by spectral method.
-The charge density is given by and expanded as Fourier harmonics:
+The charge density is given by:
+\begin{equation}
+	\rho(x_{j_x}) = \sum_\alpha \sum_{j_\alpha} w_{j_\alpha} S_x(x_{j_x} - x_{j_\alpha}) \textrm{ .} \label{eq:charge_density}
+\end{equation}
+Fourier expand charge density and electrostatic field:
+\begin{equation}
+	\left\{ \begin{array}{c}
+		\rho(x_{j_x}) \\
+		E(x_{j_x})
+	\end{array} \right\} = \sum_{j_k = 0}^{N_x - 1} \left\{ \begin{array}{c}
+		\rho_{j_k} \\
+		E_{j_k}
+	\end{array} \right\} \exp \left( i \frac{2 \pi}{N_x} j_k j_x \right) \textrm{ .} \label{eq:fourier_expansion}
+\end{equation}
+%Superscript $^*$ indicates complex conjugate.
+The Fourier component coefficients are given by:
+\begin{equation}
+	\left\{ \begin{array}{c}
+		\rho_{j_k} \\
+		E_{j_k}
+	\end{array} \right\} = \frac{1}{N_x} \sum_{j_k = 0}^{N_x - 1} \left\{ \begin{array}{c}
+		\rho(x_{j_x}) \\
+		E(x_{j_x})
+	\end{array} \right\} \exp \left( -i \frac{2 \pi}{N_x} j_k j_x \right) \textrm{ .}
+\end{equation}
+Plug Eqs.~\ref{eq:charge_density} and \ref{eq:fourier_expansion} into \autoref{eq:poisson_df_pic} and consider the orthogonality of Fourier harmonics to get:
 \begin{eqnarray}
-	\rho(x_{j_x}) & = & \sum_\alpha \sum_{j_\alpha} w_{j_\alpha} S_x(x_{j_x} - x_{j_\alpha}) \nonumber \\
-	& = & \sum_{j_k = -\infty}^{\infty} \rho_{j_k} \exp \left( i \frac{2 \pi}{l} j_k x \right) \nonumber \\
-	& = & \sum_{j_k = 1}^{\infty} \left[ \rho_{j_k} \exp \left( i \frac{2 \pi}{l} j_k x \right) + \rho_{j_k}^* \exp \left( -i \frac{2 \pi}{l} j_k x \right) \right] + \rho_0 \nonumber \\
+	i \frac{2 \pi}{l} j_k E_{j_k} & = & 4 \pi \rho_{j_k} \textrm{ ,} \label{eq:poisson_df_pic_fourier1} \\
+	E_{j_k} & = & -i \frac{l}{2 \pi j_k} 4 \pi \rho_{j_k} \textrm{ .} \label{eq:poisson_df_pic_fourier2}
 \end{eqnarray}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Normalization}
+
+In \texttt{PIC1D-PETSc}, charge is normalized by proton charge $e$.
+Mass is normalized by electron mass $m_{\mathrm{e}}$.
+Temperature is normalized by electron temperature $T_{\mathrm{e}}$.
+Time is normalized by the reciprocal of electron oscillation frequency $1/\omega_{\mathrm{pe}}$.
+Length ($l$ or $x$) is normalized by electron Debye length $\lambda_{\mathrm{De}}$.
+As a result, velocity is normalized by electron thermal velocity $v_{\mathrm{th},\mathrm{e}}$.
+Physical particle distribution function ($f$ or $\delta f$) is normalized by electron density over thermal velocity $n_{0 \mathrm{e}} / v_{\mathrm{th},\mathrm{e}}$.
+Physical particle density ($\delta n$) is normalized by electron density $n_{0 \mathrm{e}}$.
+Electrostatic field is normalized by $T_{\mathrm{e}} / (e \lambda_{\mathrm{De}})$.
+
+The normalized equations have the same form as described in \autoref{sec:df_pic}, except that the Poisson equation Eqs. \ref{eq:poisson_df_pic}, \ref{eq:poisson_df_pic_fourier1} and \ref{eq:poisson_df_pic_fourier2} no longer have the $4 \pi$ coefficient.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Vector-matrix form of $\delta f$ PIC formulation}
+
+As this is a 1D model, all physical quantities are scalars.
+All vectors mentioned in this section are mathematical vectors.
+For each species, all particles' $x$ coordinates form a vector of size $N_\alpha$:
+\begin{equation}
+	\boldsymbol{x}_\alpha \equiv \left[ \begin{array}{c}
+		x_{1,\alpha} \\
+		x_{2,\alpha} \\
+		\vdots \\
+		x_{j_\alpha} \\
+		\vdots \\
+		x_{N_\alpha}
+	\end{array} \right] \textrm{ .}
+\end{equation}
+Similarly, velocities and weights form vectors of $\boldsymbol{v}_\alpha$, $\boldsymbol{p}_\alpha$ and $\boldsymbol{w}_\alpha$, all of which are of size $N_\alpha$.
+
+Field quantities $E$ and $\rho$ form vectors $\boldsymbol{E}$ and $\boldsymbol{\rho}$ of size $N_x$, respectively.
+For example, $\boldsymbol{E}$ is given by:
+\begin{equation}
+	\boldsymbol{E} \equiv \left[ \begin{array}{c}
+		E_{1} \\
+		E_{2} \\
+		\vdots \\
+		E_{j_x} \\
+		\vdots \\
+		E_{N_x}
+	\end{array} \right] \textrm{ .}
+\end{equation}
+
+The particle evolution equations are:
+\begin{eqnarray}
+	\frac{\md \boldsymbol{x}_\alpha}{\md t} & = & \boldsymbol{v}_\alpha \textrm{ ,} \\
+	\frac{\md \boldsymbol{v}_\alpha}{\md t} & = & \frac{Z_\alpha}{m_\alpha} \boldsymbol{E}_\alpha \textrm{ ,} \\
+	\frac{\md \boldsymbol{p}_\alpha}{\md t} & = & 0 \textrm{ ,} \\
+	\frac{\md \boldsymbol{w}_\alpha}{\md t} & = & -(\boldsymbol{p} - \boldsymbol{w}) \frac{Z_\alpha}{T_\alpha} \mathrm{diag} (\boldsymbol{E}_\alpha) \boldsymbol{v}_\alpha \textrm{ ,}
+\end{eqnarray}
+where $\mathrm{diag}()$ transforms a vector to a diagonal matrix:
+\begin{equation}
+	\mathrm{diag}(\boldsymbol{y}) = \mathrm{diag}( \left[ \begin{array}{c}
+		y_1 \\
+		y_2 \\
+		\vdots \\
+		y_N
+	\end{array} \right] ) \equiv \left[ \begin{array}{cccc}
+		y_1 & & & \\
+		 & y_2 & & \\
+		 & & \ddots & \\
+		 & & & y_N
+	\end{array} \right] \textrm{ ;}
+\end{equation}
+$\boldsymbol{E}_\alpha$ is a vector of size $N_\alpha$, and each element is the electrostatic field at the corresponding particle's position.
 
 \end{document}
 
