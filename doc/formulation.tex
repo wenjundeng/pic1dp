@@ -228,12 +228,12 @@ Field quantities $E$ and $\rho$ form vectors $\boldsymbol{E}$ and $\boldsymbol{\
 For example, $\boldsymbol{E}$ is given by:
 \begin{equation}
 	\boldsymbol{E} \equiv \left[ \begin{array}{c}
-		E_{1} \\
-		E_{2} \\
+		E(x_{1}) \\
+		E(x_{2}) \\
 		\vdots \\
-		E_{j_x} \\
+		E(x_{j_x}) \\
 		\vdots \\
-		E_{N_x}
+		E(x_{N_x})
 	\end{array} \right] \textrm{ .}
 \end{equation}
 
@@ -258,7 +258,17 @@ where $\mathrm{diag}()$ transforms a vector to a diagonal matrix:
 		 & & & y_N
 	\end{array} \right] \textrm{ ;}
 \end{equation}
-$\boldsymbol{E}_\alpha$ is a vector of size $N_\alpha$, and each element is the electrostatic field at the corresponding particle's position.
+$\boldsymbol{E}_\alpha$ is a vector of size $N_\alpha$, and each element is the electrostatic field at the corresponding particle's position:
+\begin{equation}
+	\boldsymbol{E}_\alpha = \left[ \begin{array}{c}
+		E(x_{1,\alpha}) \\
+		E(x_{2,\alpha}) \\
+		\vdots \\
+		E(x_{j_\alpha}) \\
+		\vdots \\
+		E(x_{N_\alpha})
+	\end{array} \right] \textrm{ .}
+\end{equation}
 
 \end{document}
 
