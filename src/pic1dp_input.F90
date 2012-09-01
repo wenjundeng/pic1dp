@@ -50,11 +50,15 @@ PetscInt, parameter :: input_nspecies = 1
 
 ! particle charge (normalized by proton charge e),
 ! mass (normalized by electron mass),
-! and temperature (normalized by electron temperature)
+! temperature (normalized by electron temperature),
+! density (normalized by electron equilibrium density),
+! and equilibrium flow (normalized by electron thermal velocity)
 PetscReal, dimension(input_nspecies), parameter :: &
-  input_charge = (/ -1.0_kpr /), &
-  input_mass = (/ 1.0_kpr /), &
-  input_temperature = (/ 1.0_kpr /)
+  input_species_charge = (/ -1.0_kpr /), &
+  input_species_mass = (/ 1.0_kpr /), &
+  input_species_temperature = (/ 1.0_kpr /), &
+  input_species_density = (/ 1.0_kpr /), &
+  input_species_v0 = (/ 0.0_kpr /)
 
 ! # of modes kept
 PetscInt, parameter :: input_nmode = 1

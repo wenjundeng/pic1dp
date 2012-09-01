@@ -137,15 +137,16 @@ do ispecies = 1, input_nspecies
 
   if (input_imarker == 1) then ! Maxwellian in velocity space
     call gaussian_generate(pv)
-    pv(:) = pv(:) * sqrt(input_temperature(ispecies) / input_mass(ispecies))
+    pv(:) = pv(:) * sqrt( &
+      input_species_temperature(ispecies) / input_species_mass(ispecies))
     pp(:) = input_lx / input_nparticle
   else ! input_imarker == 2, uniform in velocity space
     call random_number(pv)
     pv(:) = (pv(:) - 0.5_kpr) * 2.0_kpr * input_v_max
-    pp(:) = input_lx / input_nparticle * exp(-pv(:)**2 &
-      / (2.0_kpr * input_temperature(ispecies) / input_mass(ispecies))) &
+    pp(:) = input_lx / input_nparticle * exp(-pv(:)**2 / (2.0_kpr &
+      * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
       / sqrt(2.0_kpr * PETSC_PI &
-      * input_temperature(ispecies) / input_mass(ispecies)) &
+      * input_species_temperature(ispecies) / input_species_mass(ispecies)) &
       * 2.0_kpr * input_v_max
   end if
 

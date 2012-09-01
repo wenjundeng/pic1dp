@@ -48,7 +48,8 @@ if (input_iptclshape < 3) then
       field_tmp, global_ierr &
     )
     CHKERRQ(global_ierr)
-    call VecAXPY(field_chargeden, input_charge(ispecies), field_tmp, global_ierr)
+    call VecAXPY(field_chargeden, &
+      input_species_charge(ispecies), field_tmp, global_ierr)
     CHKERRQ(global_ierr)
   end do
   ! at this point field_chargeden stores charge on a grid
@@ -98,7 +99,7 @@ else
     call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
     CHKERRQ(global_ierr)
     field_arr_charge2 = field_arr_charge2 &
-      + field_arr_charge1 * input_charge(ispecies)
+      + field_arr_charge1 * input_species_charge(ispecies)
   end do ! ispecies = 1, input_nspecies
 
   call wtimer_start(21)
@@ -236,7 +237,8 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
   call VecWAXPY( &
     particle_w(ispecies), &
-    dt * input_charge(ispecies) / input_temperature(ispecies), &
+    dt * input_species_charge(ispecies) &
+    / input_species_temperature(ispecies), &
     particle_tmp2, particle_w_bak(ispecies), global_ierr &
   )
   CHKERRQ(global_ierr)
@@ -246,7 +248,7 @@ do ispecies = 1, input_nspecies
   if (input_linear /= 1) then
     call VecWAXPY( &
       particle_v(ispecies), &
-      dt * input_charge(ispecies) / input_mass(ispecies), &
+      dt * input_species_charge(ispecies) / input_species_mass(ispecies), &
       particle_tmp1, particle_v_bak(ispecies), global_ierr &
     )
   end if
