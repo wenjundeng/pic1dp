@@ -120,7 +120,7 @@ compile PIC1D-PETSc by executing in the terminal:
 
 	make
 
-The compiled binary file and other compilation are put in `/build`.  To remove
+The compiled binary file and other compilation are put in `build/`.  To remove
 the compiled binary and other compilation files, execute:
 
 	make cleanbuild
@@ -136,9 +136,9 @@ is correctly configured, you can then run PIC1D-PETSc by executing:
 
 ### Output data and visualization
 
-The output files are put in `/run`.  The running progress is logged to
-`/run/pic1dp.log`.  The output data is written to `/run/pic1dp.out`.  The
-`/run/pic1dp.out.info` file is a byproduct of the PETSc I/O and has no use for
+The output files are put in `run/`.  The running progress is logged to
+`run/pic1dp.log`.  The output data is written to `run/pic1dp.out`.  The
+`run/pic1dp.out.info` file is a byproduct of the PETSc I/O and has no use for
 PIC1D-PETSc.
 
 **When you execute `make run`, the output files of previous run will be erased
@@ -151,8 +151,8 @@ environment variable, and finally execute:
 
 	make visual
 
-Or alternatively you can execute `/visual/visual.py` directly.
-`/visual/visual.py` has one optional argument, which is the path of the output
+Or alternatively you can execute `visual/visual.py` directly.
+`visual/visual.py` has one optional argument, which is the path of the output
 data.  If the argument is absent, it reads data from current directory.
 
 The visualization app shows 7 panels.  The left 4 show time history of various
