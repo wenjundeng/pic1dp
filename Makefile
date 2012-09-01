@@ -35,7 +35,7 @@ NPE_RUN := 4
 
 export
 
-.PHONY : build run visual cleanbuild cleanrun
+.PHONY : build run visual doc cleanbuild cleanrun
 
 build : build/pic1dp
 
@@ -48,6 +48,9 @@ run : build/pic1dp
 
 visual :
 	./visual/visual.py ./run
+
+doc :
+	$(MAKE) -C ./doc
 
 cleanbuild :
 	$(MAKE) -C ./build clean

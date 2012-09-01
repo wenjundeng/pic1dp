@@ -10,3 +10,9 @@ run/*.out*
 
 visual/*.pyc
 
+doc/*.aux
+doc/*.out
+doc/*.log
+doc/*.fdb_latexmk
+doc/*.pdf
+
