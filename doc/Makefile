@@ -1,11 +1,10 @@
 .PHONY : clean cleanall
 
 formulation.pdf : formulation.tex
-	pdflatex formulation
-	pdflatex formulation
+	latexmk -pdf formulation
 
 clean :
-	rm -f formulation.aux formulation.log formulation.out
+	rm -f formulation.aux formulation.log formulation.out formulation.fdb_latexmk
 
 cleanall : clean
 	rm -f formulation.pdf

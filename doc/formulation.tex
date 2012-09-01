@@ -19,7 +19,8 @@
 \documentclass[12pt]{article}
 
 \usepackage[colorlinks,linkcolor=blue,citecolor=blue,bookmarks,pdfstartview=FitH]{hyperref}
-\usepackage{amsmath} % necessary for correct parenthesis around equation number
+% amsmath is necessary for correct parenthesis around equation number
+\usepackage{amsfonts,amsmath}
 
 % \Autoref is for the beginning of the sentence
 \let\orgautoref\autoref
@@ -54,9 +55,9 @@
 \newcommand{\md}{\mathrm{d}}
 \newcommand{\me}{\mathrm{e}}
 
-\title{1D electrostatic $\delta f$ particle-in-cell (PIC) formulation in vector-matrix form}
+\title{1D electrostatic $\delta f$ particle-in-cell (PIC) formulation in vector-matrix form \\
+\large for \texttt{PIC1D-PETSc version 2012-08-24 22:36:24-04:00}}
 \author{Wenjun Deng}
-\date{2012-08-26 16:14:59-04:00}
 \maketitle
 
 
@@ -146,15 +147,16 @@ Note that for Maxwellian:
 \end{equation}
 $\delta f$ PIC formulation:
 \begin{eqnarray}
-	\frac{\md x_{j_\alpha}}{\md t} & = & v_{j_\alpha} \textrm{ ,} \\
+	\frac{\md x_{j_\alpha}}{\md t} & = & v_{j_\alpha} \textrm{ ,} \label{eq:particle_evolution_begin} \\
 	\frac{\md v_{j_\alpha}}{\md t} & = & \frac{Z_\alpha}{m_\alpha} E(x_{j_\alpha}) \textrm{ ,} \\
 	\frac{\md p_{j_\alpha}}{\md t} & = & 0 \textrm{ ,} \\
 	\frac{\md w_{j_\alpha}}{\md t} & = & - (p_{j_\alpha} - w_{j_\alpha}) \frac{Z_\alpha}{m_\alpha} E(x_{j_\alpha}) \frac{\partial_v f_{0 \alpha}}{f_{0 \alpha}} \nonumber \\
-	& = & (p_{j_\alpha} - w_{j_\alpha}) \frac{Z_\alpha}{T_\alpha} E(x_{j_\alpha}) v_{j_\alpha} \textrm{ ,} \\
+	& = & (p_{j_\alpha} - w_{j_\alpha}) \frac{Z_\alpha}{T_\alpha} E(x_{j_\alpha}) v_{j_\alpha} \textrm{ ,} \label{eq:particle_evolution_end} \\
 	\partial_x E(x_{j_x}) & = & 4 \pi \sum_\alpha \sum_{j_\alpha} w_{j_\alpha} S_x(x_{j_x} - x_{j_\alpha}) \textrm{ ,} \label{eq:poisson_df_pic} \\
-	E(x_{j_\alpha}) & = & E(x_{j_x}) S_x(x_{j_x} - x_{j_\alpha}) h_x \textrm{ .}
+	E(x_{j_\alpha}) & = & \sum_{j_x = 0}^{N_x - 1} E(x_{j_x}) S_x(x_{j_x} - x_{j_\alpha}) h_x \textrm{ .} \label{eq:field_scatter}
 \end{eqnarray}
 $j_x$ is index for grids in $x$.
+Note that $j_x$ starts from $0$ for convenience to write the discrete Fourier transform (DFT) equations in the next paragraph.
 
 In this model, $x$ is periodic and the box size is $l$.
 \autoref{eq:poisson_df_pic} is solved by spectral method.
@@ -173,7 +175,7 @@ Fourier expand charge density and electrostatic field:
 	\end{array} \right\} \exp \left( i \frac{2 \pi}{N_x} j_k j_x \right) \textrm{ .} \label{eq:fourier_expansion}
 \end{equation}
 %Superscript $^*$ indicates complex conjugate.
-The Fourier component coefficients are given by:
+The Fourier component coefficients are given by (DFT):
 \begin{equation}
 	\left\{ \begin{array}{c}
 		\rho_{j_k} \\
@@ -181,7 +183,7 @@ The Fourier component coefficients are given by:
 	\end{array} \right\} = \frac{1}{N_x} \sum_{j_k = 0}^{N_x - 1} \left\{ \begin{array}{c}
 		\rho(x_{j_x}) \\
 		E(x_{j_x})
-	\end{array} \right\} \exp \left( -i \frac{2 \pi}{N_x} j_k j_x \right) \textrm{ .}
+	\end{array} \right\} \exp \left( -i \frac{2 \pi}{N_x} j_k j_x \right) \textrm{ .} \label{eq:dft}
 \end{equation}
 Plug Eqs.~\ref{eq:charge_density} and \ref{eq:fourier_expansion} into \autoref{eq:poisson_df_pic} and consider the orthogonality of Fourier harmonics to get:
 \begin{eqnarray}
@@ -237,7 +239,7 @@ For example, $\boldsymbol{E}$ is given by:
 	\end{array} \right] \textrm{ .}
 \end{equation}
 
-The particle evolution equations are:
+The particle evolution equations, i.e., Eqs.~\ref{eq:particle_evolution_begin}--\ref{eq:particle_evolution_end}, become:
 \begin{eqnarray}
 	\frac{\md \boldsymbol{x}_\alpha}{\md t} & = & \boldsymbol{v}_\alpha \textrm{ ,} \\
 	\frac{\md \boldsymbol{v}_\alpha}{\md t} & = & \frac{Z_\alpha}{m_\alpha} \boldsymbol{E}_\alpha \textrm{ ,} \\
@@ -269,6 +271,58 @@ $\boldsymbol{E}_\alpha$ is a vector of size $N_\alpha$, and each element is the 
 		E(x_{N_\alpha})
 	\end{array} \right] \textrm{ .}
 \end{equation}
+The relation between $\boldsymbol{E}_\alpha$ and $\boldsymbol{E}$ can be found from \autoref{eq:field_scatter}, and is then given by:
+\begin{equation}
+	\boldsymbol{E}_\alpha = \mathbb{S}_\alpha \boldsymbol{E} \textrm{ ,}
+\end{equation}
+where $\mathbb{S}_\alpha$ is the shape matrix of size $N_\alpha \times N_x$ and its elements are given by:
+\begin{equation}
+	(\mathbb{S}_\alpha)_{j_\alpha, j_x} = S_x(x_{j_x} - x_{j_\alpha}) \cdot h_x = \left\{ \begin{array}{ll}
+		1 - \frac{|x_{j_x} - x_{j_\alpha}|}{h_x} & |x_{j_x} - x_{j_\alpha}| < h_x \\
+		0 & \textrm{otherwise}
+	\end{array} \right. \textrm{ .}
+\end{equation}
+Note that $\mathbb{S}_\alpha$ is a sparse matrix.
+For the hat shape function, each row of $\mathbb{S}_\alpha$ has two non-zero elements.
+The charge density vector $\boldsymbol{\rho}$ of size $N_x$ can be found from \autoref{eq:charge_density}, and is then given by:
+\begin{equation}
+	\boldsymbol{\rho} = \sum_\alpha Z_\alpha \frac{\mathbb{S}_\alpha^{\mathrm{T}} \boldsymbol{w}_\alpha}{h_x} \textrm{ ,}
+\end{equation}
+where superscript $^\mathrm{T}$ indicates matrix transpose.
+
+Because DFT is a linear transform, the DFT of charge density \autoref{eq:dft} can be written as:
+\begin{equation}
+	\boldsymbol{\rho}_k = \frac{1}{N_x} \mathbb{F} \boldsymbol{\rho} \textrm{ ,} \label{eq:dft_vm}
+\end{equation}
+where $\mathbb{F}$ is the DFT operator matrix of size $N_x \times N_x$, and its elements are given by:
+\begin{equation}
+	(\mathbb{F})_{j_k,j_x} = \exp \left( -i \frac{2 \pi}{N_x} j_k j_x \right) \textrm{ .}
+\end{equation}
+Note that literally performing the matrix multiplication in \autoref{eq:dft_vm} has a complexity $O(N_x^2)$.
+When the whole spectrum is needed, fast Fourier transform (FFT) should be used instead, which reduces the complexity to $O(N_x \log_2 N_x)$ if $N_x$ is a power of $2$.
+If only a few Fourier components are needed, then only the corresponding rows in $\mathbb{F}$ need to be kept, which is implemented in \texttt{PIC1D-PETSc}.
+Then the electrostatic field in Fourier space can be found from \autoref{eq:poisson_df_pic_fourier2}, and the vector-matrix form is given by (after normalization, the factor $4 \pi$ does not show up here):
+\begin{equation}
+	\boldsymbol{E}_k = -i \cdot \mathrm{diag}(\boldsymbol{k})^{-1} \boldsymbol{\rho}_k \textrm{ ,} \label{eq:poisson_df_pic_fourier2_vm}
+\end{equation}
+where vector $k$ in full-spectrum case is given by:
+\begin{equation}
+	\boldsymbol{k} = \left[ \begin{array}{c}
+		0 \\
+		\frac{2 \pi}{l} \\
+		\frac{2 \pi}{l} \cdot 2 \\
+		\vdots \\
+		\frac{2 \pi}{l} \cdot (N_x - 1)
+	\end{array} \right] \textrm{ .}
+\end{equation}
+If only some Fourier components are kept, then the size of $\boldsymbol{k}$ becomes the number of the kept components, and only the corresponding elements show up in $\boldsymbol{k}$.
+Note that the first element of $\boldsymbol{k}$ is 0, which corresponds to the $k = 0$ zonal component.
+This would not be a problem when zonal component is excluded from the system.
+If there is a case when zonal component needs to be kept, it needs special care and cannot be put in $\boldsymbol{E}_k$ and $\boldsymbol{k}$ directly as the matrix inversion $\mathrm{diag}(\boldsymbol{k})^{-1}$ would fail. Finally, the electrostatic field on the real space grid is given by the inverse DFT:
+\begin{equation}
+	\boldsymbol{E} = \mathbb{F}^\dagger \boldsymbol{E}_k \textrm{ ,}
+\end{equation}
+where $^\dagger$ indicates conjugate transpose.
 
 \end{document}
 
