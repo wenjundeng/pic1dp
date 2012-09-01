@@ -55,6 +55,10 @@ The visualization app requires [Python](http://www.python.org/) 2.7+,
 [NumPy](http://numpy.scipy.org/) 1.4+ and
 [matplotlib](http://matplotlib.sourceforge.net/) 1.1+ to run.
 
+The formulation document requires LaTeX to compile.  If you do not have LaTeX
+at hand, you can download a pdf copy of the formulation at:
+<http://wdeng.info/?wpdmact=process&did=OS5ob3RsaW5r>.
+
 
 Usage
 -----
@@ -63,6 +67,9 @@ Usage
 
 + `README.md` -- This instruction.
 + `Makefile` -- For using GNU make to compile and run PIC1D-PETSc.
++ `doc/` -- Place for documentation.
+	+ `doc/Makefile` -- For compiling the documentation.
+	+ `doc/formulation.tex` -- Formulation of PIC1D-PETSc.
 + `build/` -- Place to compile PIC1D-PETSc.  Object files generated during
 compilation will be put here.
 	+ `build/Makefile` -- For compiling PIC1D-PETSc.
@@ -155,6 +162,18 @@ Clicking in the upper left panel changes the time for the right 3 panels.
 Clicking and dragging in the lower left panel chooses a time range for the 2
 panels in the 2nd column.  The growth/damping rate calculation is based on the
 plot end points of the 2nd column upper panel.
+
+
+### Documentation
+
+To compile the PIC1D-PETSc formulation document, make sure a LaTeX environment
+with `latexmk` is correctly set up, then execute:
+
+	make doc
+
+The compiled document is `doc/formulation.pdf`.  If you do not want to compile
+it yourself, you can download `formulation.pdf` from:
+<http://wdeng.info/?wpdmact=process&did=OS5ob3RsaW5r>.
 
 
 Contact
