@@ -61,7 +61,21 @@ call wtimer_start(iwt_total) ! start recording total time
 call wtimer_start(iwt_init)
 call MPI_Comm_rank(MPI_COMM_WORLD, global_mype, global_ierr)
 CHKERRQ(global_ierr)
-if (input_verbosity >= 1) call global_pp("PIC1D-PETSc version " // version // "\n")
+if (input_verbosity >= 1) &
+  call global_pp("PIC1D-PETSc version " // version // "\n")
+! check input parameters
+if (&
+  (input_iptcldist == 1 .or. input_iptcldist == 2) .and. input_imarker == 1 &
+) then
+  call global_pp("Error: case of input_iptcldist = 1 or 2 and input_")
+  call global_pp("imarker = 1 not implemented yet.\n")
+  stop 1
+end if
+if (input_linear == 1 .and. input_deltaf == 0) then
+  call global_pp("Error: case of input_linear = 1 and input_deltaf = 0 no")
+  call global_pp("t implemented yet.\n")
+  stop 1
+end if
 call particle_init
 call field_init
 call output_init

@@ -43,11 +43,26 @@ if (input_iptclshape < 3) then
   CHKERRQ(global_ierr)
 
   do ispecies = 1, input_nspecies
-    call MatMultTranspose( &
-      particle_shape_x(ispecies), particle_w(ispecies), &
-      field_tmp, global_ierr &
-    )
-    CHKERRQ(global_ierr)
+    if (input_deltaf == 1) then
+      call MatMultTranspose( &
+        particle_shape_x(ispecies), particle_w(ispecies), &
+        field_tmp, global_ierr &
+      )
+      CHKERRQ(global_ierr)
+    else
+      ! full-f case, first use p to calculate total density
+      call MatMultTranspose( &
+        particle_shape_x(ispecies), particle_p(ispecies), &
+        field_tmp, global_ierr &
+      )
+      CHKERRQ(global_ierr)
+      ! then subtract equilibrium density to get perturbed density
+      call VecGetArrayF90(field_tmp, pc, global_ierr)
+      CHKERRQ(global_ierr)
+      pc(:) = pc(:) - input_species_density(ispecies) * input_lx / input_nx
+      call VecRestoreArrayF90(field_tmp, pc, global_ierr)
+      CHKERRQ(global_ierr)
+    end if
     call VecAXPY(field_chargeden, &
       input_species_charge(ispecies), field_tmp, global_ierr)
     CHKERRQ(global_ierr)
@@ -58,11 +73,17 @@ if (input_iptclshape < 3) then
   CHKERRQ(global_ierr)
 else
   ! first collect local portion of particle charges to field_arr_charge2
-  field_arr_charge1 = 0.0_kpr
   field_arr_charge2 = 0.0_kpr
   do ispecies = 1, input_nspecies
-    call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
-    CHKERRQ(global_ierr)
+    field_arr_charge1 = 0.0_kpr
+    if (input_deltaf == 1) then
+      call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
+      CHKERRQ(global_ierr)
+    else
+      ! full-f case, first use p to get total density
+      call VecGetArrayF90(particle_p(ispecies), pw, global_ierr)
+      CHKERRQ(global_ierr)
+    end if
     if (input_iptclshape == 4) then
       call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
       CHKERRQ(global_ierr)
@@ -96,10 +117,15 @@ else
       call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
       CHKERRQ(global_ierr)
     end if
-    call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
-    CHKERRQ(global_ierr)
-    field_arr_charge2 = field_arr_charge2 &
-      + field_arr_charge1 * input_species_charge(ispecies)
+    if (input_deltaf == 1) then
+      call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
+      CHKERRQ(global_ierr)
+    else
+      call VecRestoreArrayF90(particle_p(ispecies), pw, global_ierr)
+      CHKERRQ(global_ierr)
+    end if
+    field_arr_charge2(:) = field_arr_charge2(:) &
+      + field_arr_charge1(:) * input_species_charge(ispecies)
   end do ! ispecies = 1, input_nspecies
 
   call wtimer_start(21)
@@ -111,9 +137,18 @@ else
   ! copy values from field_arr_charge1 to field_chargeden
   call VecGetArrayF90(field_chargeden, pc, global_ierr)
   CHKERRQ(global_ierr)
-  do ix = field_ix_low, field_ix_high - 1
-    pc(ix - field_ix_low + 1) = field_arr_charge1(ix) * input_nx / input_lx
-  end do
+!  do ix = field_ix_low, field_ix_high - 1
+!    pc(ix - field_ix_low + 1) = field_arr_charge1(ix) * input_nx / input_lx
+!  end do
+  pc(1 : field_ix_high - field_ix_low) &
+    = field_arr_charge1(field_ix_low : field_ix_high - 1) * input_nx / input_lx
+  if (input_deltaf == 0) then
+    ! nonlinear case, subtract equilibrium charge density
+    do ispecies = 1, input_nspecies
+      pc(:) = pc(:) &
+        - input_species_charge(ispecies) * input_species_density(ispecies)
+    end do
+  end if
   call VecRestoreArrayF90(field_chargeden, pc, global_ierr)
   CHKERRQ(global_ierr)
 end if
@@ -147,8 +182,10 @@ if (irk == 1) then
     CHKERRQ(global_ierr)
     call VecCopy(particle_v(ispecies), particle_v_bak(ispecies), global_ierr)
     CHKERRQ(global_ierr)
-    call VecCopy(particle_w(ispecies), particle_w_bak(ispecies), global_ierr)
-    CHKERRQ(global_ierr)
+    if (input_deltaf == 1) then
+      call VecCopy(particle_w(ispecies), particle_w_bak(ispecies), global_ierr)
+      CHKERRQ(global_ierr)
+    end if
   end do
 else
   ! 2nd Runge-Kutta sub-step
@@ -176,10 +213,10 @@ do ispecies = 1, input_nspecies
   ! calculate electric field at particle
   if (input_iptclshape < 3) then
     call MatMult(particle_shape_x(ispecies), field_electric, &
-      particle_tmp1, global_ierr)
+      particle_electric, global_ierr)
     CHKERRQ(global_ierr)
   else
-    call VecGetArrayF90(particle_tmp1, pptcl, global_ierr)
+    call VecGetArrayF90(particle_electric, pptcl, global_ierr)
     CHKERRQ(global_ierr)
     if (input_iptclshape == 4) then
       call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
@@ -208,10 +245,9 @@ do ispecies = 1, input_nspecies
       call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
       CHKERRQ(global_ierr)
     end if
-    call VecRestoreArrayF90(particle_tmp1, pptcl, global_ierr)
+    call VecRestoreArrayF90(particle_electric, pptcl, global_ierr)
     CHKERRQ(global_ierr)
   end if
-  ! at this point particle_tmp1 stores electric field at particle positions
 
   ! push x
   call VecWAXPY(particle_x(ispecies), dt, particle_v(ispecies), &
@@ -221,35 +257,79 @@ do ispecies = 1, input_nspecies
   ! or interaction_collect_charge, depending on input_iptclshape
 
   ! push w
-  if (input_linear == 1) then
-    call VecCopy(particle_p(ispecies), particle_tmp2, global_ierr)
+  if (input_deltaf == 1) then
+    ! calculate (p - w) * E (or p * E for linear) and store in particle_tmp2
+    if (input_linear == 1) then
+      call VecCopy(particle_p(ispecies), particle_tmp2, global_ierr)
+      CHKERRQ(global_ierr)
+    else
+      call VecWAXPY(particle_tmp2, -1.0_kpr, particle_w(ispecies), &
+        particle_p(ispecies), global_ierr)
+      CHKERRQ(global_ierr)
+    end if
+    call VecPointwiseMult(particle_tmp2, &
+      particle_tmp2, particle_electric, global_ierr)
     CHKERRQ(global_ierr)
-  else
-    call VecWAXPY(particle_tmp2, -1.0_kpr, particle_w(ispecies), &
-      particle_p(ispecies), global_ierr)
+    ! at this point particle_tmp2 = (p - w) * E (or p * E for linear)
+
+    ! calculate -d f_0 / d v / f_0 and store in particle_tmp1
+    call VecCopy(particle_v(ispecies), particle_tmp1, global_ierr)
+    CHKERRQ(global_ierr)
+    if (input_iptcldist == 1) then ! two-stream1
+      call VecReciprocal(particle_tmp1, global_ierr)
+      CHKERRQ(global_ierr)
+      call VecAYPX(particle_tmp1, -2.0_kpr, particle_v(ispecies), global_ierr)
+      CHKERRQ(global_ierr)
+    elseif (input_iptcldist == 2) then ! two-stream2
+      call VecGetArrayF90(particle_tmp1, pptcl, global_ierr)
+      CHKERRQ(global_ierr)
+      pptcl(:) = ((pptcl(:) + input_species_v0(ispecies)) &
+        * exp(-(pptcl(:) + input_species_v0(ispecies))**2 / (2.0_kpr &
+        * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
+        + (pptcl(:) - input_species_v0(ispecies)) &
+        * exp(-(pptcl(:) - input_species_v0(ispecies))**2 / (2.0_kpr &
+        * input_species_temperature(ispecies) / input_species_mass(ispecies)))) &
+        / (exp(-(pptcl(:) + input_species_v0(ispecies))**2 / (2.0_kpr &
+        * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
+        + exp(-(pptcl(:) - input_species_v0(ispecies))**2 / (2.0_kpr &
+        * input_species_temperature(ispecies) / input_species_mass(ispecies))))
+      call VecRestoreArrayF90(particle_tmp1, pptcl, global_ierr)
+      CHKERRQ(global_ierr)
+      call VecScale(particle_tmp1, input_species_mass(ispecies) &
+        / input_species_temperature(ispecies), global_ierr)
+      CHKERRQ(global_ierr)
+    else
+      call VecGetArrayF90(particle_tmp1, pptcl, global_ierr)
+      CHKERRQ(global_ierr)
+      pptcl(:) = pptcl(:) - input_species_v0(ispecies)
+      call VecRestoreArrayF90(particle_tmp1, pptcl, global_ierr)
+      CHKERRQ(global_ierr)
+      call VecScale(particle_tmp1, input_species_mass(ispecies) &
+        / input_species_temperature(ispecies), global_ierr)
+      CHKERRQ(global_ierr)
+    end if
+    ! at this point particle_tmp1 = -d f_0 / d v / f_0
+
+    call VecPointwiseMult(particle_tmp2, &
+      particle_tmp2, particle_tmp1, global_ierr)
+    CHKERRQ(global_ierr)
+
+    call VecWAXPY( &
+      particle_w(ispecies), &
+      dt * input_species_charge(ispecies) &
+      / input_species_mass(ispecies), &
+      particle_tmp2, particle_w_bak(ispecies), global_ierr &
+    )
     CHKERRQ(global_ierr)
   end if
-  call VecPointwiseMult(particle_tmp2, &
-    particle_tmp2, particle_tmp1, global_ierr)
-  CHKERRQ(global_ierr)
-  call VecPointwiseMult(particle_tmp2, &
-    particle_tmp2, particle_v(ispecies), global_ierr)
-  CHKERRQ(global_ierr)
-  call VecWAXPY( &
-    particle_w(ispecies), &
-    dt * input_species_charge(ispecies) &
-    / input_species_temperature(ispecies), &
-    particle_tmp2, particle_w_bak(ispecies), global_ierr &
-  )
-  CHKERRQ(global_ierr)
 
   ! push v
   ! (this must be after push x and w because dx/dt and dw/dt depend on v)
-  if (input_linear /= 1) then
+  if (input_linear == 0) then
     call VecWAXPY( &
       particle_v(ispecies), &
       dt * input_species_charge(ispecies) / input_species_mass(ispecies), &
-      particle_tmp1, particle_v_bak(ispecies), global_ierr &
+      particle_electric, particle_v_bak(ispecies), global_ierr &
     )
   end if
 end do ! ispecies = 1, input_nspecies
