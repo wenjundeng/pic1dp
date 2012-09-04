@@ -212,10 +212,10 @@ class VisualApp:
 
         # formatters
         self._scalar_t_formatter = XScalarFormatter( \
-            useOffset = True, useMathText = True, precision = 1)
+            useOffset = True, useMathText = True, precision = 2)
         self._scalar_t_formatter.set_powerlimits((-2, 3))
         self._ptcldist_xv_colorbar_formatter = XScalarFormatter( \
-            useOffset = True, useMathText = True, precision = 1)
+            useOffset = True, useMathText = True, precision = 2)
         self._ptcldist_xv_colorbar_formatter.set_powerlimits((-2, 3))
 
         # layout
@@ -490,8 +490,12 @@ class VisualApp:
         self._ax_ptcldist_xv_colorbar.clear()
         self._ax_ptcldist_xv.set_xlabel('$x$')
         self._ax_ptcldist_xv.set_ylabel('$v$')
+        nlevel = 64
+        fmax = np.max(ptcldist_xv)
+        fmin = np.min(ptcldist_xv)
+        levels = fmin + (fmax - fmin) * np.arange(nlevel) / (nlevel - 1.0)
         cf = self._ax_ptcldist_xv.contourf( \
-            self._data.xv[0], self._data.xv[1], ptcldist_xv)
+            self._data.xv[0], self._data.xv[1], ptcldist_xv, levels)
         plt.colorbar(cf, cax = self._ax_ptcldist_xv_colorbar, \
             format = self._ptcldist_xv_colorbar_formatter)
 
