@@ -159,9 +159,13 @@ class OutputData:
 
         return field_x
 
-    def get_ptcldist_xv(self, itime, ispecies, iptcldist):
+    def get_ptcldist_xv(self, itime, ispecies, iptcldist, periodicbound = True):
         '''get data of particle distribution in x-v plane'''
-        ptcldist_xv = np.zeros((self.nv, self.nx + 1))
+        if periodicbound:
+            ptcldist_xv = np.zeros((self.nv, self.nx + 1))
+        else:
+            ptcldist_xv = np.zeros((self.nv, self.nx))
+
         rawdata = self._rawdataset[itime]
         if ispecies < self.nspecies:
             ptcldist_xv[:, 0 : self.nx] \
@@ -170,7 +174,9 @@ class OutputData:
             for i in range(self.nspecies):
                 ptcldist_xv[:, 0 : self.nx] \
                     += rawdata[5 + i * 6 + iptcldist].reshape((self.nv, self.nx))
-        ptcldist_xv[:, self.nx] = ptcldist_xv[:, 0] # boundary condition
+        if periodicbound:
+            ptcldist_xv[:, self.nx] = ptcldist_xv[:, 0] # boundary condition
+
         return ptcldist_xv
 
     def get_ptcldist_v(self, itime, ispecies, iptcldist):
@@ -226,10 +232,10 @@ class VisualApp:
 
         # formatters
         self._scalar_t_formatter = XScalarFormatter( \
-            useOffset = True, useMathText = True, precision = 1)
+            useOffset = True, useMathText = True, precision = 2)
         self._scalar_t_formatter.set_powerlimits((-2, 3))
         self._ptcldist_xv_colorbar_formatter = XScalarFormatter( \
-            useOffset = True, useMathText = True, precision = 1)
+            useOffset = True, useMathText = True, precision = 2)
         self._ptcldist_xv_colorbar_formatter.set_powerlimits((-2, 3))
 
         # layout
@@ -517,8 +523,12 @@ class VisualApp:
         self._ax_ptcldist_xv_colorbar.clear()
         self._ax_ptcldist_xv.set_xlabel('$x$')
         self._ax_ptcldist_xv.set_ylabel('$v$')
+        nlevel = 64
+        fmax = np.max(ptcldist_xv)
+        fmin = np.min(ptcldist_xv)
+        levels = fmin + (fmax - fmin) * np.arange(nlevel) / (nlevel - 1.0)
         cf = self._ax_ptcldist_xv.contourf( \
-            self._data.xv[0], self._data.xv[1], ptcldist_xv)
+            self._data.xv[0], self._data.xv[1], ptcldist_xv, levels)
         plt.colorbar(cf, cax = self._ax_ptcldist_xv_colorbar, \
             format = self._ptcldist_xv_colorbar_formatter)
 
