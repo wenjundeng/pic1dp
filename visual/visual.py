@@ -156,13 +156,19 @@ class OutputData:
 
         return field_x
 
-    def get_ptcldist_xv(self, itime, ispecies, iptcldist):
+    def get_ptcldist_xv(self, itime, ispecies, iptcldist, periodicbound = True):
         '''get data of particle distribution in x-v plane'''
-        ptcldist_xv = np.zeros((self.nv, self.nx + 1))
+        if periodicbound:
+            ptcldist_xv = np.zeros((self.nv, self.nx + 1))
+        else:
+            ptcldist_xv = np.zeros((self.nv, self.nx))
+
         rawdata = self._rawdataset[itime]
         ptcldist_xv[:, 0 : self.nx] \
             = rawdata[5 + ispecies * 6 + iptcldist].reshape((self.nv, self.nx))
-        ptcldist_xv[:, self.nx] = ptcldist_xv[:, 0] # boundary condition
+        if periodicbound:
+            ptcldist_xv[:, self.nx] = ptcldist_xv[:, 0] # boundary condition
+
         return ptcldist_xv
 
     def get_ptcldist_v(self, itime, ispecies, iptcldist):
