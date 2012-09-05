@@ -28,7 +28,7 @@ use pic1dp_output
 implicit none
 #include "finclude/petsc.h90"
 
-character(len = 25), parameter :: version = '2012-08-24 22:36:24-04:00'
+character(len = 25), parameter :: version = '2012-09-05 18:08:32-04:00'
 
 ! wall clock timer indexes
 PetscInt, parameter :: &
@@ -39,11 +39,14 @@ PetscInt, parameter :: &
   iwt_particle_shape = 5, &
   iwt_collect_charge = 6, &
   iwt_field_electric = 7, &
-  iwt_output = 8, &
-  iwt_final = 9
+  iwt_particle_merge = 8, &
+  iwt_output = 9, &
+  iwt_final = 10
 
 PetscInt :: nrk ! # of Runge-Kutta sub-steps
 PetscInt :: irk ! indexing Runge-Kutta sub-steps
+
+PetscInt :: imerge ! indexing particle merge times
 
 ! termination related variables
 PetscInt :: itermination ! status of termination condition: 0: not to terminate; 1: to terminate
@@ -61,7 +64,21 @@ call wtimer_start(iwt_total) ! start recording total time
 call wtimer_start(iwt_init)
 call MPI_Comm_rank(MPI_COMM_WORLD, global_mype, global_ierr)
 CHKERRQ(global_ierr)
-if (input_verbosity >= 1) call global_pp("PIC1D-PETSc version " // version // "\n")
+if (input_verbosity >= 1) &
+  call global_pp("PIC1D-PETSc version " // version // "\n")
+! check input parameters
+if (&
+  (input_iptcldist == 1 .or. input_iptcldist == 2) .and. input_imarker == 1 &
+) then
+  call global_pp("Error: case of input_iptcldist = 1 or 2 and input_")
+  call global_pp("imarker = 1 not implemented yet.\n")
+  stop 1
+end if
+if (input_linear == 1 .and. input_deltaf == 0) then
+  call global_pp("Error: case of input_linear = 1 and input_deltaf = 0 no")
+  call global_pp("t implemented yet.\n")
+  stop 1
+end if
 call particle_init
 call field_init
 call output_init
@@ -76,9 +93,20 @@ if (input_iptclshape < 4) then
   call particle_compute_shape_x
   call wtimer_stop(iwt_particle_shape)
 end if
+if (input_verbosity >= 1) then
+  write (global_msg, '(a, i10, a, i2, a, i10, a)') &
+    'Info: loaded # of particles: ', input_nparticle, ' * ', input_nspecies, &
+    ' = ', input_nparticle * input_nspecies, "\n"
+  call global_pp(global_msg)
+end if
 
 global_itime = 0
 global_time = 0.0_kpr
+if (input_nmerge > 0) then
+  imerge = 1
+else
+  imerge = 0
+end if
 
 ! solve initial field
 ! collect charges
@@ -110,6 +138,27 @@ do while (itermination == 0)
     call wtimer_start(iwt_push_particle)
     call interaction_push_particle(irk)
     call wtimer_stop(iwt_push_particle)
+
+    ! merge non-resonant particles
+    if (input_deltaf == 1 &
+      .and. imerge > 0 .and. imerge <= size(input_tmerge)) then
+      if (global_time + input_dt >= input_tmerge(imerge) .and. irk == 2) then
+        call wtimer_start(iwt_particle_merge)
+        ! set resonant fraction threshold
+        !particle_df_thsh_res_frac = 0.2_kpr
+        particle_df_thsh_res_frac = 0.01_kpr * imerge
+        ! detect and mark resonant particles
+        call particle_detect_resonant
+        ! perform merging
+        call particle_merge
+        call wtimer_stop(iwt_particle_merge)
+        ! print out information
+        call wtimer_start(iwt_output)
+        call output_progress(1)
+        call wtimer_stop(iwt_output)
+        imerge = imerge + 1
+      end if
+    end if
 
     if (input_iptclshape < 4) then
       !call wtimer_start(21)
@@ -145,7 +194,7 @@ do while (itermination == 0)
     ) < mod( &
       global_time + PETSc_SQRT_MACHINE_EPSILON - input_dt, input_output_interval &
     ) & ! time just passed a full interval
-    .or. itermination == 1 &
+    .or. itermination == 1 & ! final time step
   ) then
     call wtimer_start(iwt_output)
     call output_all
@@ -188,11 +237,12 @@ if (input_verbosity >= 1) then
     // string_wt(iwt_field_electric) // string_wt(iwt_output) // "\n")
 
   call global_pp( &
-    "     finalization    MPI_Allreduce          scatter                .\n")
+    "   particle merge     finalization    MPI_Allreduce          scatter\n")
+  call wtimer_print(iwt_particle_merge, string_wt(iwt_particle_merge), iwt_total, .true.)
   call wtimer_print(iwt_final, string_wt(iwt_final), iwt_total, .true.)
   call wtimer_print(21, string_wt(21), iwt_total, .true.)
   call wtimer_print(22, string_wt(22), iwt_total, .true.)
-  call global_pp(string_wt(iwt_final) // &
+  call global_pp(string_wt(iwt_particle_merge) // string_wt(iwt_final) // &
     string_wt(21) // string_wt(22) // "\n")
 !  call global_pp(string_wt(iwt_final) // "\n")
 end if

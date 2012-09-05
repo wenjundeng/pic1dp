@@ -92,8 +92,8 @@ class OutputData:
         try: # read until EOF
             while True:
                 rawdata = []
-                # scalars
-                rawdata.append(io.readReal(fdata, self.nspecies * 3 + 2)) # index 0
+                # scalars # index 0
+                rawdata.append(io.readReal(fdata, self.nspecies * 3 + 2))
                 # electric field Fourier components
                 header = io.readInt(fdata, 1)[0]
                 rawdata.append(io.readVec(fdata)) # index 1
@@ -124,12 +124,15 @@ class OutputData:
 
     def get_scalar_t(self):
         '''get data of scalar vs t'''
-        scalar_t = np.zeros((self.nspecies * 3 + 2, self.ntime))
+        scalar_t = np.zeros(((self.nspecies + 1) * 3 + 2, self.ntime))
         for itime in range(self.ntime):
             rawdata = self._rawdataset[itime]
-            #print rawdata[0]
-            #print 'aaa'
-            scalar_t[:, itime] = rawdata[0]
+            scalar_t[0 : self.nspecies * 3 + 2, itime] = rawdata[0]
+            # calculate summation from all species
+            for ispecies in range(self.nspecies):
+                scalar_t[self.nspecies * 3 + 2, itime] += rawdata[0][ispecies * 3 + 2]
+                scalar_t[self.nspecies * 3 + 3, itime] += rawdata[0][ispecies * 3 + 3]
+                scalar_t[self.nspecies * 3 + 4, itime] += rawdata[0][ispecies * 3 + 4]
 
         return scalar_t
 
@@ -156,19 +159,36 @@ class OutputData:
 
         return field_x
 
-    def get_ptcldist_xv(self, itime, ispecies, iptcldist):
+    def get_ptcldist_xv(self, itime, ispecies, iptcldist, periodicbound = True):
         '''get data of particle distribution in x-v plane'''
-        ptcldist_xv = np.zeros((self.nv, self.nx + 1))
+        if periodicbound:
+            ptcldist_xv = np.zeros((self.nv, self.nx + 1))
+        else:
+            ptcldist_xv = np.zeros((self.nv, self.nx))
+
         rawdata = self._rawdataset[itime]
-        ptcldist_xv[:, 0 : self.nx] \
-            = rawdata[5 + ispecies * 6 + iptcldist].reshape((self.nv, self.nx))
-        ptcldist_xv[:, self.nx] = ptcldist_xv[:, 0] # boundary condition
+        if ispecies < self.nspecies:
+            ptcldist_xv[:, 0 : self.nx] \
+                = rawdata[5 + ispecies * 6 + iptcldist].reshape((self.nv, self.nx))
+        else:
+            for i in range(self.nspecies):
+                ptcldist_xv[:, 0 : self.nx] \
+                    += rawdata[5 + i * 6 + iptcldist].reshape((self.nv, self.nx))
+        if periodicbound:
+            ptcldist_xv[:, self.nx] = ptcldist_xv[:, 0] # boundary condition
+
         return ptcldist_xv
 
     def get_ptcldist_v(self, itime, ispecies, iptcldist):
         '''get data of particle distribution in v space'''
         rawdata = self._rawdataset[itime]
-        return rawdata[8 + ispecies * 6 + iptcldist]
+        if ispecies < self.nspecies:
+            return rawdata[8 + ispecies * 6 + iptcldist]
+        else:
+            ret = np.zeros((self.nv))
+            for i in range(self.nspecies):
+                ret += rawdata[8 + i * 6 + iptcldist]
+            return ret
 
 
 class VisualApp:
@@ -212,10 +232,10 @@ class VisualApp:
 
         # formatters
         self._scalar_t_formatter = XScalarFormatter( \
-            useOffset = True, useMathText = True, precision = 1)
+            useOffset = True, useMathText = True, precision = 2)
         self._scalar_t_formatter.set_powerlimits((-2, 3))
         self._ptcldist_xv_colorbar_formatter = XScalarFormatter( \
-            useOffset = True, useMathText = True, precision = 1)
+            useOffset = True, useMathText = True, precision = 2)
         self._ptcldist_xv_colorbar_formatter.set_powerlimits((-2, 3))
 
         # layout
@@ -267,6 +287,7 @@ class VisualApp:
         self._species_labels = []
         for i in range(self._data.nspecies):
             self._species_labels.append(str(i + 1))
+        self._species_labels.append('sum')
         self._species_chooser = widgets.RadioButtons( \
             self._ax_species_chooser, self._species_labels, \
             active = self._ispecies)
@@ -379,13 +400,17 @@ class VisualApp:
 
     def _ani_advance(self):
         '''Advance animation frame'''
+
+        # not playing, return directly
         if not self._ani_playing:
             return
+
+        # temporarily turn off playing status to avoid double advancing
+        self._ani_playing = False
+
         self._itime = self._itime + 1
         if self._itime > self._data.ntime - 1:
             self._itime = self._data.ntime - 1
-            self._ani_playing = False
-            #self._ani_playpause_on_click(None)
 
         t = self._scalar_t[0][self._itime]
         self._ax_scalar_t_tln.set_xdata(np.array([t, t]))
@@ -395,6 +420,14 @@ class VisualApp:
         self.update_plot_field_x()
         self.update_plot_ptcldist_xv()
         self.update_plot_ptcldist_v()
+
+        if self._itime >= self._data.ntime - 1:
+            self._ani_playing = False
+            self._ani_playpause.label.set_text('Play animation')
+            plt.draw()
+        else:
+            # keep on playing
+            self._ani_playing = True
         plt.draw()
 
     def update_plot_scalar_t(self):
@@ -490,8 +523,12 @@ class VisualApp:
         self._ax_ptcldist_xv_colorbar.clear()
         self._ax_ptcldist_xv.set_xlabel('$x$')
         self._ax_ptcldist_xv.set_ylabel('$v$')
+        nlevel = 64
+        fmax = np.max(ptcldist_xv)
+        fmin = np.min(ptcldist_xv)
+        levels = fmin + (fmax - fmin) * np.arange(nlevel) / (nlevel - 1.0)
         cf = self._ax_ptcldist_xv.contourf( \
-            self._data.xv[0], self._data.xv[1], ptcldist_xv)
+            self._data.xv[0], self._data.xv[1], ptcldist_xv, levels)
         plt.colorbar(cf, cax = self._ax_ptcldist_xv_colorbar, \
             format = self._ptcldist_xv_colorbar_formatter)
 

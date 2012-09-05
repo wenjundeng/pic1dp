@@ -27,16 +27,20 @@ implicit none
 ! perturbed weight: w = delta f / g
 ! f is total distribution, delta f is perturbed distribution
 ! g is marker distribution
+! s is particle status: 0: normal/non-resonant; -1: invalid; 1: resonant
 Vec, dimension(input_nspecies) :: &
   particle_x, particle_v, particle_p, particle_w, &
-  particle_x_bak, particle_v_bak, particle_w_bak
+  particle_x_bak, particle_v_bak, particle_w_bak, &
+  particle_s
+
+! electric field at particle position, need to be used in pic1dp_interaction
+Vec :: particle_electric
 
 ! temporary particle vectors, need to be used 
 ! in pic1dp_interaction and pic1dp_output
 Vec :: particle_tmp1, particle_tmp2
 
-Mat, dimension(input_nspecies) :: &
-  particle_shape_xv, particle_shape_x, particle_shape_v
+Mat, dimension(input_nspecies) :: particle_shape_x
 
 ! shape arrays
 PetscInt, dimension(:, :), allocatable :: particle_shape_x_indexes
@@ -44,6 +48,12 @@ PetscReal, dimension(:, :), allocatable :: particle_shape_x_values
 
 ! local index range of particle
 PetscInt :: particle_ip_low, particle_ip_high
+
+! delta f threshold (fraction of max(abs(delta f))) for resonant particle
+PetscReal :: particle_df_thsh_res_frac
+
+! # of reduced particles due to merge
+PetscInt :: particle_nredu(input_nspecies) = 0
 
 contains
 
@@ -76,6 +86,10 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
   call VecDuplicate(particle_x(1), particle_w(ispecies), global_ierr)
   CHKERRQ(global_ierr)
+  call VecDuplicate(particle_x(1), particle_s(ispecies), global_ierr)
+  CHKERRQ(global_ierr)
+  call VecSet(particle_s(ispecies), 0.0_kpr, global_ierr)
+  CHKERRQ(global_ierr)
 
   call VecDuplicate(particle_x(1), particle_x_bak(ispecies), global_ierr)
   CHKERRQ(global_ierr)
@@ -84,14 +98,14 @@ do ispecies = 1, input_nspecies
   call VecDuplicate(particle_x(1), particle_w_bak(ispecies), global_ierr)
   CHKERRQ(global_ierr)
 
-  call global_matcreate(particle_shape_xv(ispecies), &
-    input_nparticle, input_nx * input_output_nv, 4, 4)
-  call global_matcreate(particle_shape_x(ispecies), &
-    input_nparticle, input_nx, 2, 2)
-  call global_matcreate(particle_shape_v(ispecies), &
-    input_nparticle, input_output_nv, 2, 2)
+  if (input_iptclshape <= 2) then
+    call global_matcreate(particle_shape_x(ispecies), &
+      input_nparticle, input_nx, 2, 2)
+  end if
 end do
 
+call VecDuplicate(particle_x(1), particle_electric, global_ierr)
+CHKERRQ(global_ierr)
 call VecDuplicate(particle_x(1), particle_tmp1, global_ierr)
 CHKERRQ(global_ierr)
 call VecDuplicate(particle_x(1), particle_tmp2, global_ierr)
@@ -99,11 +113,13 @@ CHKERRQ(global_ierr)
 
 call VecGetOwnershipRange(particle_x(1), particle_ip_low, particle_ip_high, global_ierr)
 CHKERRQ(global_ierr)
-allocate (particle_shape_x_indexes( &
-  input_nspecies, particle_ip_low : particle_ip_high - 1 &
-), particle_shape_x_values( &
-  input_nspecies, particle_ip_low : particle_ip_high - 1 &
-))
+if (input_iptclshape == 3) then
+  allocate (particle_shape_x_indexes( &
+    input_nspecies, particle_ip_high - particle_ip_low &
+  ), particle_shape_x_values( &
+    input_nspecies, particle_ip_high - particle_ip_low &
+  ))
+end if
 
 end subroutine particle_init
 
@@ -135,20 +151,39 @@ do ispecies = 1, input_nspecies
   call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
   CHKERRQ(global_ierr)
 
-  if (input_imarker == 1) then ! Maxwellian in velocity space
+  if (input_imarker == 1) then ! load markers same as physical distribution
+    ! currently only supports input_iptcldist == 1: (shifted) Maxwellian
     call gaussian_generate(pv)
-    pv(:) = pv(:) * sqrt(input_temperature(ispecies) / input_mass(ispecies))
-    pp(:) = input_lx / input_nparticle
+    pv(:) = pv(:) * sqrt(input_species_temperature(ispecies) &
+      / input_species_mass(ispecies)) + input_species_v0(ispecies)
+    pp(:) = input_species_density(ispecies) * input_lx / input_nparticle
   else ! input_imarker == 2, uniform in velocity space
     call random_number(pv)
     pv(:) = (pv(:) - 0.5_kpr) * 2.0_kpr * input_v_max
-    pp(:) = input_lx / input_nparticle * exp(-pv(:)**2 &
-      / (2.0_kpr * input_temperature(ispecies) / input_mass(ispecies))) &
-      / sqrt(2.0_kpr * PETSC_PI &
-      * input_temperature(ispecies) / input_mass(ispecies)) &
-      * 2.0_kpr * input_v_max
+    if (input_iptcldist == 1) then ! two-stream1
+      pp(:) = input_species_density(ispecies) * input_lx / input_nparticle &
+        * pv(:)**2 * exp(-pv(:)**2 / 2.0_kpr) / sqrt(2.0_kpr * PETSC_PI) &
+        * 2.0_kpr * input_v_max
+    elseif (input_iptcldist == 2) then ! two-stream2
+      pp(:) =  input_species_density(ispecies) * input_lx / input_nparticle &
+        * (exp(-(pv(:) + input_species_v0(ispecies))**2 / (2.0_kpr &
+        * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
+        + exp(-(pv(:) - input_species_v0(ispecies))**2 / (2.0_kpr &
+        * input_species_temperature(ispecies) / input_species_mass(ispecies)))) &
+        / sqrt(8.0_kpr * PETSC_PI &
+        * input_species_temperature(ispecies) / input_species_mass(ispecies)) &
+        * 2.0_kpr * input_v_max
+    else ! (shifted) Maxwellian
+      pp(:) = input_species_density(ispecies) * input_lx / input_nparticle &
+        * exp(-(pv(:) - input_species_v0(ispecies))**2 / (2.0_kpr &
+        * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
+        / sqrt(2.0_kpr * PETSC_PI &
+        * input_species_temperature(ispecies) / input_species_mass(ispecies)) &
+        * 2.0_kpr * input_v_max
+    end if
   end if
 
+  ! uniform in x
   call random_number(px)
   px(:) = px(:) * input_lx
 
@@ -160,10 +195,11 @@ do ispecies = 1, input_nspecies
       + input_init_mode_sin(imode) * sin(2.0_kpr * PETSC_PI / input_lx &
         * real(input_init_mode(imode), kpr) * px(:))
   end do
-  do ip = particle_ip_low, particle_ip_high - 1
-    pw(ip - particle_ip_low + 1) = pw(ip - particle_ip_low + 1) &
-      * input_lx / input_nparticle &
-      * input_pertb_shape(pv(ip - particle_ip_low + 1))
+  ! apply perturbation shape in velocity space
+  do ip = 1, particle_ip_high - particle_ip_low
+    pw(ip) = pw(ip) &
+      * input_species_density(ispecies) * input_lx / input_nparticle &
+      * input_pertb_shape(pv(ip), ispecies)
   end do
 
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
@@ -175,7 +211,7 @@ do ispecies = 1, input_nspecies
   call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
   CHKERRQ(global_ierr)
 
-  ! for linear, p = f_0 / g; for nonlinear, p = f / g
+  ! for linear, p = f_0 / g; for nonlinear, p = f / g = f_0 / g + delta f / g
   if (input_linear == 0) then
     call VecAXPY(particle_p(ispecies), &
       1.0_kpr, particle_w(ispecies), global_ierr)
@@ -183,98 +219,7 @@ do ispecies = 1, input_nspecies
   end if
 end do
 
-!  call VecView(particle_x(1), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call VecView(particle_v(1), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call VecView(particle_p(1), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call VecView(particle_w(1), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-
 end subroutine particle_load
-
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! compute shape matrix in x-v plane !
-! obsolete                          !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine particle_compute_shape_xv
-use pic1dp_global
-implicit none
-#include "finclude/petsc.h90"
-
-PetscInt :: ispecies, nindex
-PetscInt :: ip
-PetscInt :: ix1, ix2, iv, ixv
-PetscScalar :: sx, sv
-PetscScalar, dimension(:), pointer :: px, pv
-PetscInt, dimension(0 : 3) :: indexes
-PetscScalar, dimension(0 : 3) :: values
-
-
-do ispecies = 1, input_nspecies
-!  call MatDestroy(particle_shape_xv(ispecies), global_ierr)
-!  CHKERRQ(global_ierr)
-  call MatZeroEntries(particle_shape_xv(ispecies), global_ierr)
-  CHKERRQ(global_ierr)
-
-  call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
-  CHKERRQ(global_ierr)
-  call VecGetArrayF90(particle_v(ispecies), pv, global_ierr)
-  CHKERRQ(global_ierr)
-
-  do ip = particle_ip_low, particle_ip_high - 1
-    if (abs(pv(ip - particle_ip_low + 1)) >= input_v_max) cycle
-
-    sx = px(ip - particle_ip_low + 1) / input_lx * input_nx
-    ix1 = floor(sx)
-    sx = sx - real(ix1, kpr)
-    ix2 = ix1 + 1
-    if (ix2 == input_nx) ix2 = 0
-
-    sv = (pv(ip - particle_ip_low + 1) + input_v_max) &
-      / (input_v_max * 2.0_kpr) * (input_output_nv - 1)
-    iv = floor(sv)
-    sv = sv - real(iv, kpr)
-
-    nindex = 4
-    indexes(0) = iv * input_nx + ix1
-    indexes(1) = iv * input_nx + ix2
-    indexes(2) = (iv + 1) * input_nx + ix1
-    indexes(3) = (iv + 1) * input_nx + ix2
-    values(0) = (1.0_kpr - sx) * (1.0_kpr - sv)
-    values(1) = sx * (1.0_kpr - sv)
-    values(2) = (1.0_kpr - sx) * sv
-    values(3) = sx * sv
-    call MatSetValues( &
-      particle_shape_xv(ispecies), 1, ip, &
-      nindex, indexes, values, INSERT_VALUES, global_ierr &
-    )
-    CHKERRQ(global_ierr)
-  end do
-  call MatAssemblyBegin(particle_shape_xv(ispecies), &
-    MAT_FINAL_ASSEMBLY, global_ierr)
-  CHKERRQ(global_ierr)
-  call MatAssemblyEnd(particle_shape_xv(ispecies), &
-    MAT_FINAL_ASSEMBLY, global_ierr)
-  CHKERRQ(global_ierr)
-
-  call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
-  CHKERRQ(global_ierr)
-  call VecRestoreArrayF90(particle_v(ispecies), pv, global_ierr)
-  CHKERRQ(global_ierr)
-
-
-!  call VecView(particle_x(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call VecView(particle_v(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call MatView(particle_shape_xv(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-end do
-
-end subroutine particle_compute_shape_xv
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -289,12 +234,9 @@ PetscInt :: ispecies, nindex
 PetscInt :: ip
 PetscInt :: ix1, ix2
 PetscScalar :: sx
-PetscScalar, dimension(:), pointer :: px
+PetscScalar, dimension(:), pointer :: px, ps
 PetscInt, dimension(0 : 1) :: indexes
 PetscScalar, dimension(0 : 1) :: values
-
-!call VecGetOwnershipRange(particle_x(1), ip_low, ip_high, global_ierr)
-!CHKERRQ(global_ierr)
 
 do ispecies = 1, input_nspecies
   if (input_iptclshape == 1) then
@@ -309,19 +251,22 @@ do ispecies = 1, input_nspecies
 
   call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_s(ispecies), ps, global_ierr)
+  CHKERRQ(global_ierr)
 
-  do ip = particle_ip_low, particle_ip_high - 1
+  do ip = 1, particle_ip_high - particle_ip_low
+    ! ignore invalid particles
+    if (ps(ip) < -0.5_kpr) cycle
     ! enforce periodic boundary condition
-    px(ip - particle_ip_low + 1) = mod(px(ip - particle_ip_low + 1), input_lx)
+    px(ip) = mod(px(ip), input_lx)
     ! if x is negative, mod gives negative result, so shift it to positive
-    if (px(ip - particle_ip_low + 1) < 0.0_kpr) &
-      px(ip - particle_ip_low + 1) = px(ip - particle_ip_low + 1) + input_lx
+    if (px(ip) < 0.0_kpr) px(ip) = px(ip) + input_lx
 
-    sx = px(ip - particle_ip_low + 1) / input_lx * input_nx
+    sx = px(ip) / input_lx * input_nx
     ix1 = floor(sx)
     sx = sx - real(ix1, kpr)
-!    if (global_mype == 0 .and. ip == particle_ip_low) write (*, *) ix1, 1.0_kpr - sx
-    if (input_iptclshape < 3) then
+!    if (global_mype == 0 .and. ip == 1) write (*, *) ix1, 1.0_kpr - sx
+    if (input_iptclshape <= 2) then
       ix2 = ix1 + 1
       if (ix2 == input_nx) ix2 = 0
 
@@ -331,7 +276,7 @@ do ispecies = 1, input_nspecies
       values(0) = (1.0_kpr - sx)
       values(1) = sx
       call MatSetValues( &
-        particle_shape_x(ispecies), 1, ip, &
+        particle_shape_x(ispecies), 1, ip + particle_ip_low - 1, &
         nindex, indexes, values, INSERT_VALUES, global_ierr &
       )
       CHKERRQ(global_ierr)
@@ -339,8 +284,8 @@ do ispecies = 1, input_nspecies
       particle_shape_x_indexes(ispecies, ip) = ix1
       particle_shape_x_values(ispecies, ip) = (1.0_kpr - sx)
     end if
-  end do
-  if (input_iptclshape < 3) then
+  end do ! ip = 1, particle_ip_high - particle_ip_low
+  if (input_iptclshape <= 2) then
     call MatAssemblyBegin(particle_shape_x(ispecies), &
       MAT_FINAL_ASSEMBLY, global_ierr)
     CHKERRQ(global_ierr)
@@ -351,88 +296,204 @@ do ispecies = 1, input_nspecies
 
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
-
-!  call VecView(particle_x(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call VecView(particle_v(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call MatView(particle_shape_xv(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_s(ispecies), ps, global_ierr)
+  CHKERRQ(global_ierr)
 end do
 
 end subroutine particle_compute_shape_x
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! compute shape matrix in v !
-! obsolete                  !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine particle_compute_shape_v
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! detect resonant particles and set resonant status !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine particle_detect_resonant
 use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
 
-PetscInt :: ispecies, nindex
-PetscInt :: ip
-PetscInt :: iv
-PetscScalar :: sv
-PetscScalar, dimension(:), pointer :: pv
-PetscInt, dimension(0 : 1) :: indexes
-PetscScalar, dimension(0 : 1) :: values
+PetscScalar, dimension(0 : input_nv - 1) :: &
+  ptcldist_pertb_v, ptcldist_pertb_v_redu
 
-!call VecGetOwnershipRange(particle_v(1), ip_low, ip_high, global_ierr)
-!CHKERRQ(global_ierr)
+PetscScalar, dimension(:), pointer :: pv, pw, ps
+
+PetscInt :: ispecies, ip, iv
+PetscScalar :: sv, df, df_thsh_res
 
 do ispecies = 1, input_nspecies
-!  call MatDestroy(particle_shape_v(ispecies), global_ierr)
-!  CHKERRQ(global_ierr)
-!  call global_matcreate(particle_shape_v(ispecies), &
-!    input_nparticle, input_nx, 2, 2)
-  call MatZeroEntries(particle_shape_v(ispecies), global_ierr)
-  CHKERRQ(global_ierr)
+  ! first step, collect particles to v grids
+  ! (v is equilibrium constant of motion)
+  ptcldist_pertb_v(:) = 0.0_kpr
 
   call VecGetArrayF90(particle_v(ispecies), pv, global_ierr)
   CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_s(ispecies), ps, global_ierr)
+  CHKERRQ(global_ierr)
 
-  do ip = particle_ip_low, particle_ip_high - 1
-    ! if particle velocity out of v_max, ignore this particle
-    if (abs(pv(ip - particle_ip_low + 1)) >= input_v_max) cycle
+  do ip = 1, particle_ip_high - particle_ip_low
+    ! ignore invalid particle
+    if (ps(ip) < -0.5_kpr) cycle
+    ! ignore too fast particle
+    if (abs(pv(ip)) >= input_v_max) cycle
 
-    sv = (pv(ip - particle_ip_low + 1) + input_v_max) &
-      / (input_v_max * 2.0_kpr) * (input_output_nv - 1)
+    sv = (pv(ip) + input_v_max) &
+      / (input_v_max * 2.0_kpr) * (input_nv - 1)
     iv = floor(sv)
-    sv = sv - real(iv, kpr)
+    sv = 1.0_kpr - (sv - real(iv, kpr))
 
-    nindex = 2
-    indexes(0) = iv
-    indexes(1) = iv + 1
-    values(0) = (1.0_kpr - sv)
-    values(1) = sv
-    call MatSetValues( &
-      particle_shape_v(ispecies), 1, ip, &
-      nindex, indexes, values, INSERT_VALUES, global_ierr &
-    )
-    CHKERRQ(global_ierr)
-  end do
-  call MatAssemblyBegin(particle_shape_v(ispecies), &
-    MAT_FINAL_ASSEMBLY, global_ierr)
+    ! note that abs() is applied to w, otherwise positive and negative
+    ! resonant regions may get canceled out
+    ptcldist_pertb_v(iv) = ptcldist_pertb_v(iv) + sv * abs(pw(ip))
+    ptcldist_pertb_v(iv + 1) = ptcldist_pertb_v(iv + 1) &
+      + (1.0_kpr - sv) * abs(pw(ip))
+  end do ! ip = 1, particle_ip_high - particle_ip_low
+
+  call MPI_Allreduce(ptcldist_pertb_v, ptcldist_pertb_v_redu, &
+    input_nv, MPIU_SCALAR, MPI_SUM, MPI_COMM_WORLD, global_ierr)
   CHKERRQ(global_ierr)
-  call MatAssemblyEnd(particle_shape_v(ispecies), &
-    MAT_FINAL_ASSEMBLY, global_ierr)
-  CHKERRQ(global_ierr)
+
+  df_thsh_res = maxval(ptcldist_pertb_v_redu) * particle_df_thsh_res_frac
+
+  ! second step, mark resonant particles
+  do ip = 1, particle_ip_high - particle_ip_low
+    ! ignore invalid particle
+    if (ps(ip) < -0.5_kpr) cycle
+    ! ignore too fast particle
+    if (abs(pv(ip)) >= input_v_max) cycle
+
+    sv = (pv(ip) + input_v_max) &
+      / (input_v_max * 2.0_kpr) * (input_nv - 1)
+    iv = floor(sv)
+    sv = 1.0_kpr - (sv - real(iv, kpr))
+
+    df = ptcldist_pertb_v_redu(iv) * sv &
+      + ptcldist_pertb_v_redu(iv + 1) * (1.0_kpr - sv)
+
+    if (df > df_thsh_res) then
+      ps(ip) = 1.0_kpr ! resonant
+    else
+      ps(ip) = 0.0_kpr ! non-resonant
+    end if
+  end do ! ip = 1, particle_ip_high - particle_ip_low
 
   call VecRestoreArrayF90(particle_v(ispecies), pv, global_ierr)
   CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_s(ispecies), ps, global_ierr)
+  CHKERRQ(global_ierr)
 
-!  call VecView(particle_x(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call VecView(particle_v(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call MatView(particle_shape_v(ispecies), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-end do
+end do ! ispecies = 1, input_nspecies
 
-end subroutine particle_compute_shape_v
+end subroutine particle_detect_resonant
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! merge non-resonant particles                             !
+! using resonant status marked by particle_detect_resonant !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine particle_merge
+use pic1dp_global
+implicit none
+#include "finclude/petsc.h90"
+
+PetscInt, dimension(:, :, :), allocatable :: ipbin_top
+PetscInt, dimension(:, :, :, :), allocatable :: ipbin
+PetscInt :: ispecies, ip, ip1, ix, iv, iw, nx, nv
+PetscInt :: nredu1, nredu2
+
+PetscScalar, dimension(:), pointer :: px, pv, pp, pw, ps
+PetscScalar :: sx, sv
+
+nx = input_nx * 2
+nv = input_nv * 2
+
+allocate (ipbin(0 : nx - 1, 0 : nv - 1, 2, 1))
+allocate (ipbin_top(0 : nx - 1, 0 : nv - 1, 2))
+
+do ispecies = 1, input_nspecies
+  ipbin_top(:, :, :) = 1
+  nredu1 = 0
+
+  call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_v(ispecies), pv, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_p(ispecies), pp, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_s(ispecies), ps, global_ierr)
+  CHKERRQ(global_ierr)
+
+  do ip = 1, particle_ip_high - particle_ip_low
+    ! ignore invalid and resonant particle
+    if (ps(ip) < -0.5_kpr .or. ps(ip) > 0.5_kpr) cycle
+    ! ignore too fast particle
+    if (abs(pv(ip)) >= input_v_max) cycle
+
+    ! enforce periodic boundary condition
+    px(ip) = mod(px(ip), input_lx)
+    ! if x is negative, mod gives negative result, so shift it to positive
+    if (px(ip) < 0.0_kpr) px(ip) = px(ip) + input_lx
+
+    sx = px(ip) / input_lx * nx
+    ix = floor(sx)
+    sv = (pv(ip) + input_v_max) / (input_v_max * 2.0_kpr) * (nv - 1)
+    iv = floor(sv)
+
+    if (pw(ip) > 0.0_kpr) then
+      iw = 2
+    else
+      iw = 1
+    end if
+    if (ipbin_top(ix, iv, iw) < 2) then ! bin not full yet
+      ipbin(ix, iv, iw, ipbin_top(ix, iv, iw)) = ip
+      ipbin_top(ix, iv, iw) = ipbin_top(ix, iv, iw) + 1
+    else ! bin full, merge particles
+      ! calculate merged particle
+      ip1 = ipbin(ix, iv, iw, 1)
+      px(ip1) = (pw(ip1) * px(ip1) + pw(ip) * px(ip)) / (pw(ip1) + pw(ip))
+      ! no need to enforce boundary condition as it will be enforced
+      ! in particle_compute_shape_x or interaction_collect_charge
+      pv(ip1) = (pw(ip1) * pv(ip1) + pw(ip) * pv(ip)) / (pw(ip1) + pw(ip))
+      pp(ip1) = pp(ip1) + pp(ip)
+      pw(ip1) = pw(ip1) + pw(ip)
+
+      ! set obsolete particle status to be invalid and reset other properties
+      ps(ip) = -1.0_kpr
+      pv(ip) = 0.0_kpr
+      pp(ip) = 0.0_kpr
+      pw(ip) = 0.0_kpr
+      nredu1 = nredu1 + 1
+
+      ! reset bin
+      ipbin_top(ix, iv, iw) = 1
+    end if
+  end do ! ip = 1, particle_ip_high - particle_ip_low
+
+  call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_v(ispecies), pv, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_p(ispecies), pp, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_s(ispecies), ps, global_ierr)
+  CHKERRQ(global_ierr)
+
+  ! combine # of reduced particles
+  call MPI_Allreduce(nredu1, nredu2, 1, MPIU_INTEGER, MPI_SUM, &
+    MPI_COMM_WORLD, global_ierr)
+  CHKERRQ(global_ierr)
+  particle_nredu(ispecies) = particle_nredu(ispecies) + nredu2
+end do ! ispecies = 1, input_nspecies
+
+deallocate (ipbin, ipbin_top)
+
+end subroutine particle_merge
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -440,6 +501,7 @@ end subroutine particle_compute_shape_v
 !!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine particle_final
 use pic1dp_global
+use pic1dp_input
 implicit none
 #include "finclude/petsc.h90"
 
@@ -454,6 +516,8 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
   call VecDestroy(particle_w(ispecies), global_ierr)
   CHKERRQ(global_ierr)
+  call VecDestroy(particle_s(ispecies), global_ierr)
+  CHKERRQ(global_ierr)
 
   call VecDestroy(particle_x_bak(ispecies), global_ierr)
   CHKERRQ(global_ierr)
@@ -462,20 +526,20 @@ do ispecies = 1, input_nspecies
   call VecDestroy(particle_w_bak(ispecies), global_ierr)
   CHKERRQ(global_ierr)
 
-  call MatDestroy(particle_shape_xv(ispecies), global_ierr)
-  CHKERRQ(global_ierr)
   call MatDestroy(particle_shape_x(ispecies), global_ierr)
-  CHKERRQ(global_ierr)
-  call MatDestroy(particle_shape_v(ispecies), global_ierr)
   CHKERRQ(global_ierr)
 end do
 
+call VecDestroy(particle_electric, global_ierr)
+CHKERRQ(global_ierr)
 call VecDestroy(particle_tmp1, global_ierr)
 CHKERRQ(global_ierr)
 call VecDestroy(particle_tmp2, global_ierr)
 CHKERRQ(global_ierr)
 
-deallocate (particle_shape_x_indexes, particle_shape_x_values)
+if (input_iptclshape == 3) then
+  deallocate (particle_shape_x_indexes, particle_shape_x_values)
+end if
 
 end subroutine particle_final
 
