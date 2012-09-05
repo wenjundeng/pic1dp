@@ -35,7 +35,7 @@ implicit none
 #include "finclude/petsc.h90"
 
 PetscInt :: ispecies, ip, ix
-PetscScalar, dimension(:), pointer :: pw, pc, px
+PetscScalar, dimension(:), pointer :: pw, pc, px, ps
 PetscScalar :: sx
 
 if (input_iptclshape < 3) then
@@ -87,32 +87,35 @@ else
     if (input_iptclshape == 4) then
       call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
       CHKERRQ(global_ierr)
+      !write (*, *) 'size of px', size(px)
     end if
-    do ip = particle_ip_low, particle_ip_high - 1
+    call VecGetArrayF90(particle_s(ispecies), ps, global_ierr)
+    CHKERRQ(global_ierr)
+    do ip = 1, particle_ip_high - particle_ip_low
+      ! ignore invalid particles
+      if (ps(ip) < -0.5_kpr) cycle
+
       if (input_iptclshape == 3) then
         ix = particle_shape_x_indexes(ispecies, ip)
         sx = particle_shape_x_values(ispecies, ip)
       else ! input_iptclshape == 4
         ! enforce periodic boundary condition
-        px(ip - particle_ip_low + 1) &
-          = mod(px(ip - particle_ip_low + 1), input_lx)
+        px(ip) = mod(px(ip), input_lx)
         ! if x is negative, mod gives negative result, so shift it to positive
-        if (px(ip - particle_ip_low + 1) < 0.0_kpr) then
-          px(ip - particle_ip_low + 1) &
-            = px(ip - particle_ip_low + 1) + input_lx
-        end if
+        if (px(ip) < 0.0_kpr) px(ip) = px(ip) + input_lx
 
-        sx = px(ip - particle_ip_low + 1) / input_lx * input_nx
+        sx = px(ip) / input_lx * input_nx
         ix = floor(sx)
         sx = 1.0_kpr - (sx - real(ix, kpr))
       end if
-      field_arr_charge1(ix) = field_arr_charge1(ix) &
-        + sx * pw(ip - particle_ip_low + 1)
+      if (ix > input_nx - 1) then
+        write (*, *) 'global_mype, ip, x, sx, ix = ', global_mype, ip, px(ip), sx, ix
+      end if
+      field_arr_charge1(ix) = field_arr_charge1(ix) + sx * pw(ip)
       ix = ix + 1
       if (ix > input_nx - 1) ix = 0
-      field_arr_charge1(ix) = field_arr_charge1(ix) &
-        + (1.0_kpr - sx) * pw(ip - particle_ip_low + 1)
-    end do ! ip = particle_ip_low, particle_ip_high - 1
+      field_arr_charge1(ix) = field_arr_charge1(ix) + (1.0_kpr - sx) * pw(ip)
+    end do ! ip = 1, particle_ip_high - particle_ip_low
     if (input_iptclshape == 4) then
       call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
       CHKERRQ(global_ierr)
@@ -124,6 +127,8 @@ else
       call VecRestoreArrayF90(particle_p(ispecies), pw, global_ierr)
       CHKERRQ(global_ierr)
     end if
+    call VecRestoreArrayF90(particle_s(ispecies), ps, global_ierr)
+    CHKERRQ(global_ierr)
     field_arr_charge2(:) = field_arr_charge2(:) &
       + field_arr_charge1(:) * input_species_charge(ispecies)
   end do ! ispecies = 1, input_nspecies
@@ -132,6 +137,7 @@ else
   ! then use MPI_Allreduce to get charges of all particles in field_arr_charge1
   call MPI_Allreduce(field_arr_charge2, field_arr_charge1, input_nx, &
     MPIU_SCALAR, MPI_SUM, MPI_COMM_WORLD, global_ierr)
+  CHKERRQ(global_ierr)
   call wtimer_stop(21)
 
   ! copy values from field_arr_charge1 to field_chargeden
@@ -170,8 +176,9 @@ PetscInt, intent(in) :: irk ! index of Runge-Kutta sub-step
 
 PetscInt :: ispecies, ix
 PetscInt :: ip
-PetscScalar :: sx
-PetscScalar, dimension(:), pointer :: pe, pptcl, px
+PetscScalar :: sx, electric, tmp1, tmp2
+PetscScalar, dimension(:), pointer :: pe, pptcl, ppe, px, pv, pp, pw, ps
+PetscScalar, dimension(:), pointer :: pxb, pvb, pwb
 
 PetscScalar :: dt ! time step
 
@@ -210,127 +217,132 @@ end if
 call wtimer_stop(22)
 
 do ispecies = 1, input_nspecies
-  ! calculate electric field at particle
+  ! calculate electric field at particle if 
   if (input_iptclshape < 3) then
     call MatMult(particle_shape_x(ispecies), field_electric, &
       particle_electric, global_ierr)
     CHKERRQ(global_ierr)
-  else
-    call VecGetArrayF90(particle_electric, pptcl, global_ierr)
+    call VecGetArrayF90(particle_electric, ppe, global_ierr)
     CHKERRQ(global_ierr)
-    if (input_iptclshape == 4) then
-      call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
-      CHKERRQ(global_ierr)
-    end if
-    do ip = particle_ip_low, particle_ip_high - 1
+  end if
+  call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_v(ispecies), pv, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_p(ispecies), pp, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_s(ispecies), ps, global_ierr)
+  CHKERRQ(global_ierr)
+
+  call VecGetArrayF90(particle_x_bak(ispecies), pxb, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_v_bak(ispecies), pvb, global_ierr)
+  CHKERRQ(global_ierr)
+  if (input_deltaf == 1) then
+    call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
+    CHKERRQ(global_ierr)
+    call VecGetArrayF90(particle_w_bak(ispecies), pwb, global_ierr)
+    CHKERRQ(global_ierr)
+  end if
+  do ip = 1, particle_ip_high - particle_ip_low
+    ! ignore invalid particles
+    if (ps(ip) < -0.5_kpr) cycle
+
+    ! get electric field at particle
+    if (input_iptclshape <= 2) then
+      electric = ppe(ip)
+    else
       if (input_iptclshape == 3) then
         ix = particle_shape_x_indexes(ispecies, ip)
         sx = particle_shape_x_values(ispecies, ip)
-      else
+      else ! indicating (input_iptclshape == 4)
         ! periodic boundary condition is enforced in interaction_collect_charge
         ! no need to enforce boundary condition here
 
-        sx = px(ip - particle_ip_low + 1) / input_lx * input_nx
+        sx = px(ip) / input_lx * input_nx
         ix = floor(sx)
         sx = 1.0_kpr - (sx - real(ix, kpr))
       end if
 !      if (global_mype == 0 .and. ip == particle_ip_low) write (*, *) ix, sx
-      pptcl(ip - particle_ip_low + 1) = pe(ix + 1) * sx
+      electric = pe(ix + 1) * sx
       ix = ix + 1
       if (ix > input_nx - 1) ix = 0
-      pptcl(ip - particle_ip_low + 1) = &
-        pptcl(ip - particle_ip_low + 1) + pe(ix + 1) * (1.0_kpr - sx)
-    end do
-    if (input_iptclshape == 4) then
-      call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
-      CHKERRQ(global_ierr)
+      electric = electric + pe(ix + 1) * (1.0_kpr - sx)
     end if
-    call VecRestoreArrayF90(particle_electric, pptcl, global_ierr)
-    CHKERRQ(global_ierr)
-  end if
 
-  ! push x
-  call VecWAXPY(particle_x(ispecies), dt, particle_v(ispecies), &
-    particle_x_bak(ispecies), global_ierr)
+    ! push x
+    px(ip) = pxb(ip) + dt * pv(ip)
+    ! periodic boundary condition is enforced in particle_compute_shape_x
+    ! or interaction_collect_charge, depending on input_iptclshape
+
+    ! push w
+    if (input_deltaf == 1) then
+      ! calculate (p - w) * E (or p * E for linear) and store in tmp1
+      if (input_linear == 1) then
+        tmp1 = pp(ip) * electric
+      else
+        tmp1 = (pp(ip) - pw(ip)) * electric
+      end if
+
+      ! calculate -d f_0 / d v / f_0 and store in tmp2
+      if (input_iptcldist == 1) then ! two-stream1
+        tmp2 = pv(ip) - 2.0_kpr / pv(ip)
+      elseif (input_iptcldist == 2) then ! two-stream2
+        tmp2 = ((pv(ip) + input_species_v0(ispecies)) &
+          * exp(-(pv(ip) + input_species_v0(ispecies))**2 / (2.0_kpr &
+          * input_species_temperature(ispecies) &
+          / input_species_mass(ispecies))) &
+          + (pv(ip) - input_species_v0(ispecies)) &
+          * exp(-(pv(ip) - input_species_v0(ispecies))**2 / (2.0_kpr &
+          * input_species_temperature(ispecies) &
+          / input_species_mass(ispecies)))) &
+          / (exp(-(pv(ip) + input_species_v0(ispecies))**2 / (2.0_kpr &
+          * input_species_temperature(ispecies) &
+          / input_species_mass(ispecies))) &
+          + exp(-(pv(ip) - input_species_v0(ispecies))**2 / (2.0_kpr &
+          * input_species_temperature(ispecies) &
+          / input_species_mass(ispecies)))) &
+          * input_species_mass(ispecies) / input_species_temperature(ispecies)
+      else ! (shifted) Maxwellian
+        tmp2 = (pv(ip) - input_species_v0(ispecies)) &
+          * input_species_temperature(ispecies) &
+          / input_species_mass(ispecies)
+      end if
+      ! end of calculating -d f_0 / d v / f_0 and storing in tmp2
+
+      pw(ip) = pwb(ip) + dt * tmp1 * tmp2 * input_species_charge(ispecies) &
+        / input_species_mass(ispecies)
+    end if ! (input_deltaf == 1)
+
+    ! push v
+    ! (this must be after push x and w because dx/dt and dw/dt depend on v)
+    if (input_linear == 0) then
+      pv(ip) = pvb(ip) + dt * electric * input_species_charge(ispecies) &
+        / input_species_mass(ispecies)
+    end if 
+  end do ! ip = 1, particle_ip_high - particle_ip_high
+  call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
-  ! periodic boundary condition is enforced in particle_compute_shape_x
-  ! or interaction_collect_charge, depending on input_iptclshape
+  call VecRestoreArrayF90(particle_v(ispecies), pv, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_p(ispecies), pp, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_s(ispecies), ps, global_ierr)
+  CHKERRQ(global_ierr)
 
-  ! push w
+  call VecRestoreArrayF90(particle_x_bak(ispecies), pxb, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_v_bak(ispecies), pvb, global_ierr)
+  CHKERRQ(global_ierr)
   if (input_deltaf == 1) then
-    ! calculate (p - w) * E (or p * E for linear) and store in particle_tmp2
-    if (input_linear == 1) then
-      call VecCopy(particle_p(ispecies), particle_tmp2, global_ierr)
-      CHKERRQ(global_ierr)
-    else
-      call VecWAXPY(particle_tmp2, -1.0_kpr, particle_w(ispecies), &
-        particle_p(ispecies), global_ierr)
-      CHKERRQ(global_ierr)
-    end if
-    call VecPointwiseMult(particle_tmp2, &
-      particle_tmp2, particle_electric, global_ierr)
+    call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
     CHKERRQ(global_ierr)
-    ! at this point particle_tmp2 = (p - w) * E (or p * E for linear)
-
-    ! calculate -d f_0 / d v / f_0 and store in particle_tmp1
-    call VecCopy(particle_v(ispecies), particle_tmp1, global_ierr)
-    CHKERRQ(global_ierr)
-    if (input_iptcldist == 1) then ! two-stream1
-      call VecReciprocal(particle_tmp1, global_ierr)
-      CHKERRQ(global_ierr)
-      call VecAYPX(particle_tmp1, -2.0_kpr, particle_v(ispecies), global_ierr)
-      CHKERRQ(global_ierr)
-    elseif (input_iptcldist == 2) then ! two-stream2
-      call VecGetArrayF90(particle_tmp1, pptcl, global_ierr)
-      CHKERRQ(global_ierr)
-      pptcl(:) = ((pptcl(:) + input_species_v0(ispecies)) &
-        * exp(-(pptcl(:) + input_species_v0(ispecies))**2 / (2.0_kpr &
-        * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
-        + (pptcl(:) - input_species_v0(ispecies)) &
-        * exp(-(pptcl(:) - input_species_v0(ispecies))**2 / (2.0_kpr &
-        * input_species_temperature(ispecies) / input_species_mass(ispecies)))) &
-        / (exp(-(pptcl(:) + input_species_v0(ispecies))**2 / (2.0_kpr &
-        * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
-        + exp(-(pptcl(:) - input_species_v0(ispecies))**2 / (2.0_kpr &
-        * input_species_temperature(ispecies) / input_species_mass(ispecies))))
-      call VecRestoreArrayF90(particle_tmp1, pptcl, global_ierr)
-      CHKERRQ(global_ierr)
-      call VecScale(particle_tmp1, input_species_mass(ispecies) &
-        / input_species_temperature(ispecies), global_ierr)
-      CHKERRQ(global_ierr)
-    else
-      call VecGetArrayF90(particle_tmp1, pptcl, global_ierr)
-      CHKERRQ(global_ierr)
-      pptcl(:) = pptcl(:) - input_species_v0(ispecies)
-      call VecRestoreArrayF90(particle_tmp1, pptcl, global_ierr)
-      CHKERRQ(global_ierr)
-      call VecScale(particle_tmp1, input_species_mass(ispecies) &
-        / input_species_temperature(ispecies), global_ierr)
-      CHKERRQ(global_ierr)
-    end if
-    ! at this point particle_tmp1 = -d f_0 / d v / f_0
-
-    call VecPointwiseMult(particle_tmp2, &
-      particle_tmp2, particle_tmp1, global_ierr)
-    CHKERRQ(global_ierr)
-
-    call VecWAXPY( &
-      particle_w(ispecies), &
-      dt * input_species_charge(ispecies) &
-      / input_species_mass(ispecies), &
-      particle_tmp2, particle_w_bak(ispecies), global_ierr &
-    )
+    call VecRestoreArrayF90(particle_w_bak(ispecies), pwb, global_ierr)
     CHKERRQ(global_ierr)
   end if
-
-  ! push v
-  ! (this must be after push x and w because dx/dt and dw/dt depend on v)
-  if (input_linear == 0) then
-    call VecWAXPY( &
-      particle_v(ispecies), &
-      dt * input_species_charge(ispecies) / input_species_mass(ispecies), &
-      particle_electric, particle_v_bak(ispecies), global_ierr &
-    )
+  if (input_iptclshape < 3) then
+    call VecRestoreArrayF90(particle_electric, ppe, global_ierr)
+    CHKERRQ(global_ierr)
   end if
 end do ! ispecies = 1, input_nspecies
 

@@ -202,7 +202,7 @@ PetscScalar, parameter :: delx_inv = input_nx / input_lx
 
 PetscInt :: ispecies, ip, ix, iv
 PetscScalar :: sx, sv
-PetscScalar, dimension(:), pointer :: px, pv, pp, pw
+PetscScalar, dimension(:), pointer :: px, pv, pp, pw, ps
 PetscScalar, dimension(0 : input_nx * input_output_nv - 1) :: &
   ptcldist_markr_xv, ptcldist_total_xv, ptcldist_pertb_xv, &
   ptcldist_markr_xv_redu, ptcldist_total_xv_redu, ptcldist_pertb_xv_redu
@@ -242,45 +242,56 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
   call VecGetArrayF90(particle_p(ispecies), pp, global_ierr)
   CHKERRQ(global_ierr)
+  call VecGetArrayF90(particle_s(ispecies), ps, global_ierr)
+  CHKERRQ(global_ierr)
   if (input_deltaf == 1) then
     call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
     CHKERRQ(global_ierr)
   end if
 
-  do ip = particle_ip_low, particle_ip_high - 1
+  do ip = 1, particle_ip_high - particle_ip_low
+    ! ignore invalid particle
+    if (ps(ip) < -0.5_kpr) cycle
     ! if particle speed is out of v_max, ignore this particle
-    if (abs(pv(ip - particle_ip_low + 1)) >= input_v_max) cycle
+    if (abs(pv(ip)) >= input_v_max) cycle
 
-    sx = px(ip - particle_ip_low + 1) / input_lx * input_nx
+    sx = px(ip) / input_lx * input_nx
     ix = floor(sx)
     sx = 1.0_kpr - (sx - real(ix, kpr))
 
-    sv = (pv(ip - particle_ip_low + 1) + input_v_max) &
+    sv = (pv(ip) + input_v_max) &
       / (input_v_max * 2.0_kpr) * (input_output_nv - 1)
     iv = floor(sv)
     sv = 1.0_kpr - (sv - real(iv, kpr))
+
+!    if ((iv + 1) * input_nx + ix > input_nx * input_output_nv - 1 &
+!      .or. iv * input_nx + ix < 0) then
+!      write (*, *) "(x, v) = ", px(ip), pv(ip)
+!      write (*, *) "(sx, sv) = ", sx, sv
+!      write (*, *) "(ix, iv) = ", ix, iv
+!    end if
 
     ptcldist_markr_xv(iv * input_nx + ix) &
       = ptcldist_markr_xv(iv * input_nx + ix) &
       + sx * sv
     ptcldist_total_xv(iv * input_nx + ix) &
       = ptcldist_total_xv(iv * input_nx + ix) &
-      + sx * sv * pp(ip - particle_ip_low + 1)
+      + sx * sv * pp(ip)
     if (input_deltaf == 1) then
       ptcldist_pertb_xv(iv * input_nx + ix) &
         = ptcldist_pertb_xv(iv * input_nx + ix) &
-        + sx * sv * pw(ip - particle_ip_low + 1)
+        + sx * sv * pw(ip)
     end if
     ptcldist_markr_xv((iv + 1) * input_nx + ix) &
       = ptcldist_markr_xv((iv + 1) * input_nx + ix) &
       + sx * (1.0_kpr - sv)
     ptcldist_total_xv((iv + 1) * input_nx + ix) &
       = ptcldist_total_xv((iv + 1) * input_nx + ix) &
-      + sx * (1.0_kpr - sv) * pp(ip - particle_ip_low + 1)
+      + sx * (1.0_kpr - sv) * pp(ip)
     if (input_deltaf == 1) then
       ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
         = ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
-        + sx * (1.0_kpr - sv) * pw(ip - particle_ip_low + 1)
+        + sx * (1.0_kpr - sv) * pw(ip)
     end if
     ix = ix + 1
     if (ix > input_nx - 1) ix = 0
@@ -290,45 +301,47 @@ do ispecies = 1, input_nspecies
       + sx * sv
     ptcldist_total_xv(iv * input_nx + ix) &
       = ptcldist_total_xv(iv * input_nx + ix) &
-      + sx * sv * pp(ip - particle_ip_low + 1)
+      + sx * sv * pp(ip)
     if (input_deltaf == 1) then
       ptcldist_pertb_xv(iv * input_nx + ix) &
         = ptcldist_pertb_xv(iv * input_nx + ix) &
-        + sx * sv * pw(ip - particle_ip_low + 1)
+        + sx * sv * pw(ip)
     end if
     ptcldist_markr_xv((iv + 1) * input_nx + ix) &
       = ptcldist_markr_xv((iv + 1) * input_nx + ix) &
       + sx * (1.0_kpr - sv)
     ptcldist_total_xv((iv + 1) * input_nx + ix) &
       = ptcldist_total_xv((iv + 1) * input_nx + ix) &
-      + sx * (1.0_kpr - sv) * pp(ip - particle_ip_low + 1)
+      + sx * (1.0_kpr - sv) * pp(ip)
     if (input_deltaf == 1) then
       ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
         = ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
-        + sx * (1.0_kpr - sv) * pw(ip - particle_ip_low + 1)
+        + sx * (1.0_kpr - sv) * pw(ip)
     end if
 
     ptcldist_markr_v(iv) = ptcldist_markr_v(iv) + sv
     ptcldist_total_v(iv) = ptcldist_total_v(iv) &
-      + sv * pp(ip - particle_ip_low + 1)
+      + sv * pp(ip)
     if (input_deltaf == 1) then
       ptcldist_pertb_v(iv) = ptcldist_pertb_v(iv) &
-        + sv * pw(ip - particle_ip_low + 1)
+        + sv * pw(ip)
     end if
     ptcldist_markr_v(iv + 1) = ptcldist_markr_v(iv + 1) &
       + (1.0_kpr - sv)
     ptcldist_total_v(iv + 1) = ptcldist_total_v(iv + 1) &
-      + (1.0_kpr - sv) * pp(ip - particle_ip_low + 1)
+      + (1.0_kpr - sv) * pp(ip)
     if (input_deltaf == 1) then
       ptcldist_pertb_v(iv + 1) = ptcldist_pertb_v(iv + 1) &
-        + (1.0_kpr - sv) * pw(ip - particle_ip_low + 1)
+        + (1.0_kpr - sv) * pw(ip)
     end if
-  end do ! ip = particle_ip_low, particle_ip_high - 1
+  end do ! ip = 1, particle_ip_high - particle_ip_low
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
   call VecRestoreArrayF90(particle_v(ispecies), pv, global_ierr)
   CHKERRQ(global_ierr)
   call VecRestoreArrayF90(particle_p(ispecies), pp, global_ierr)
+  CHKERRQ(global_ierr)
+  call VecRestoreArrayF90(particle_s(ispecies), ps, global_ierr)
   CHKERRQ(global_ierr)
   if (input_deltaf == 1) then
     call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)

@@ -39,8 +39,7 @@ PetscReal, parameter :: input_time_max = 100.0_kpr
 ! physical parameters !
 !!!!!!!!!!!!!!!!!!!!!!!
 
-! linear or nonlinear run.
-! 0: nonlinear; 1: linear.
+! linear or nonlinear run. 0: nonlinear; 1: linear.
 PetscInt, parameter :: input_linear = 0
 
 ! length in real space (normalized by electron Debye length)
@@ -108,7 +107,7 @@ PetscInt, parameter :: input_deltaf = 1
 PetscReal, parameter :: input_dt = 0.1_kpr
 
 ! # of marker particles per species
-PetscInt, parameter :: input_nparticle = 3200000
+PetscInt, parameter :: input_nparticle = 6400000
 
 ! marker distribution in velocity space:
 ! 1: same as physical distribution; 2: uniform
@@ -122,6 +121,21 @@ PetscReal, parameter :: input_v_max = 6.0_kpr
 ! # of grid points in real space
 PetscInt, parameter :: input_nx = 64
 
+! # of times of merging particles
+PetscInt, parameter :: input_nmerge = 30
+
+! list of times to merge particles, must be in ascending order
+PetscReal, dimension(input_nmerge), parameter :: &
+!  input_tmerge = 0.0_kpr
+!  input_tmerge = (/ 30.0_kpr /)
+!  input_tmerge = (/ 30.0_kpr, 32.0_kpr, 34.0_kpr, 36.0_kpr /)
+  input_tmerge = (/ 20.0_kpr, 21.0_kpr, 22.0_kpr, 23.0_kpr, 24.0_kpr, &
+    25.0_kpr, 26.0_kpr, 27.0_kpr, 28.0_kpr, 29.0_kpr, &
+    30.0_kpr, 31.0_kpr, 32.0_kpr, 33.0_kpr, 34.0_kpr, &
+    35.0_kpr, 36.0_kpr, 37.0_kpr, 38.0_kpr, 39.0_kpr, &
+    40.0_kpr, 41.0_kpr, 42.0_kpr, 43.0_kpr, 44.0_kpr, &
+    45.0_kpr, 46.0_kpr, 47.0_kpr, 48.0_kpr, 49.0_kpr /)
+
 ! particle shape calculation
 ! 1: use PETSc matrix for shape matrix, destroy and re-create matrix every time
 ! 2: use PETSc matrix for shape matrix, use MatZeroEntries to reset matrix
@@ -132,7 +146,7 @@ PetscInt, parameter :: input_iptclshape = 4
 ! random seed type
 ! 1: random seeds (using system_clock)
 ! 2: constant seeds
-PetscInt, parameter :: input_seed_type = 1
+PetscInt, parameter :: input_seed_type = 2
 
 
 !!!!!!!!!!!!!!!!!!!!!

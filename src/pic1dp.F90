@@ -39,11 +39,16 @@ PetscInt, parameter :: &
   iwt_particle_shape = 5, &
   iwt_collect_charge = 6, &
   iwt_field_electric = 7, &
-  iwt_output = 8, &
-  iwt_final = 9
+  iwt_particle_merge = 8, &
+  iwt_output = 9, &
+  iwt_final = 10
 
 PetscInt :: nrk ! # of Runge-Kutta sub-steps
 PetscInt :: irk ! indexing Runge-Kutta sub-steps
+
+PetscInt :: imerge ! indexing particle merge times
+PetscScalar, dimension(:), pointer :: px, pv
+PetscReal :: norm
 
 ! termination related variables
 PetscInt :: itermination ! status of termination condition: 0: not to terminate; 1: to terminate
@@ -90,9 +95,16 @@ if (input_iptclshape < 4) then
   call particle_compute_shape_x
   call wtimer_stop(iwt_particle_shape)
 end if
+if (input_verbosity >= 1) then
+  write (global_msg, '(a, i10, a, i2, a, i10, a)') &
+    'Info: loaded # of particles: ', input_nparticle, ' * ', input_nspecies, &
+    ' = ', input_nparticle * input_nspecies, "\n"
+  call global_pp(global_msg)
+end if
 
 global_itime = 0
 global_time = 0.0_kpr
+if (input_nmerge > 0) imerge = 1
 
 ! solve initial field
 ! collect charges
@@ -149,6 +161,48 @@ do while (itermination == 0)
   global_itime = global_itime + 1
   global_time = global_time + input_dt
 
+  ! merge particles
+  if (input_deltaf == 1 &
+    .and. imerge > 0 .and. imerge <= size(input_tmerge)) then
+    if (global_time > input_tmerge(imerge)) then
+      !! set w threashold
+      !particle_merge_w_threshold = 0.1_kpr * imerge
+
+      call wtimer_start(iwt_particle_merge)
+      ! set resonant fraction threshold
+      !particle_df_thsh_res_frac = 0.2_kpr
+      particle_df_thsh_res_frac = 0.01_kpr * imerge
+      ! detect and mark resonant particles
+      call particle_detect_resonant
+      ! perform merging
+      call particle_merge
+      call wtimer_stop(iwt_particle_merge)
+
+      if (input_verbosity >= 1) then
+        write (global_msg, '(a, i9, a, i9, a)') &
+          'Info: particle_merge reduced # of particles:', &
+          sum(particle_nredu), '; left:', &
+          input_nparticle * input_nspecies - sum(particle_nredu), "\n"
+        call global_pp(global_msg)
+      end if
+      imerge = imerge + 1
+
+      ! refresh charge density and electric field
+      if (input_iptclshape < 4) then
+        ! update particle shape matrix
+        call wtimer_start(iwt_particle_shape)
+        call particle_compute_shape_x
+        call wtimer_stop(iwt_particle_shape)
+      end if
+      call wtimer_start(iwt_collect_charge)
+      call interaction_collect_charge
+      call wtimer_stop(iwt_collect_charge)
+      call wtimer_start(iwt_field_electric)
+      call field_solve_electric
+      call wtimer_stop(iwt_field_electric)
+    end if
+  end if
+
   ! check if needs to terminate
   itermination = check_termination()
 
@@ -202,11 +256,12 @@ if (input_verbosity >= 1) then
     // string_wt(iwt_field_electric) // string_wt(iwt_output) // "\n")
 
   call global_pp( &
-    "     finalization    MPI_Allreduce          scatter                .\n")
+    "   particle merge     finalization    MPI_Allreduce          scatter\n")
+  call wtimer_print(iwt_particle_merge, string_wt(iwt_particle_merge), iwt_total, .true.)
   call wtimer_print(iwt_final, string_wt(iwt_final), iwt_total, .true.)
   call wtimer_print(21, string_wt(21), iwt_total, .true.)
   call wtimer_print(22, string_wt(22), iwt_total, .true.)
-  call global_pp(string_wt(iwt_final) // &
+  call global_pp(string_wt(iwt_particle_merge) // string_wt(iwt_final) // &
     string_wt(21) // string_wt(22) // "\n")
 !  call global_pp(string_wt(iwt_final) // "\n")
 end if
