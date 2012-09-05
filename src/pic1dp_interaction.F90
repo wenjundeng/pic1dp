@@ -107,9 +107,6 @@ else
         ix = floor(sx)
         sx = 1.0_kpr - (sx - real(ix, kpr))
       end if
-      if (ix > input_nx - 1) then
-        write (*, *) 'global_mype, ip, x, sx, ix = ', global_mype, ip, px(ip), sx, ix
-      end if
       field_arr_charge1(ix) = field_arr_charge1(ix) + sx * pw(ip)
       ix = ix + 1
       if (ix > input_nx - 1) ix = 0

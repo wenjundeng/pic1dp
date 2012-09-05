@@ -28,7 +28,7 @@ use pic1dp_output
 implicit none
 #include "finclude/petsc.h90"
 
-character(len = 25), parameter :: version = '2012-08-24 22:36:24-04:00'
+character(len = 25), parameter :: version = '2012-09-05 18:08:32-04:00'
 
 ! wall clock timer indexes
 PetscInt, parameter :: &
@@ -47,8 +47,6 @@ PetscInt :: nrk ! # of Runge-Kutta sub-steps
 PetscInt :: irk ! indexing Runge-Kutta sub-steps
 
 PetscInt :: imerge ! indexing particle merge times
-PetscScalar, dimension(:), pointer :: px, pv
-PetscReal :: norm
 
 ! termination related variables
 PetscInt :: itermination ! status of termination condition: 0: not to terminate; 1: to terminate
@@ -104,7 +102,11 @@ end if
 
 global_itime = 0
 global_time = 0.0_kpr
-if (input_nmerge > 0) imerge = 1
+if (input_nmerge > 0) then
+  imerge = 1
+else
+  imerge = 0
+end if
 
 ! solve initial field
 ! collect charges

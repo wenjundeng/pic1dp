@@ -1,6 +1,6 @@
 PIC1D-PETSc
 ===========
-version 2012-08-24 22:36:24-04:00
+version 2012-09-05 18:08:32-04:00
 ---------------------------------
 
 PIC1D-PETSc (pic1dp) is a code simulating 1D electrostatic plasma by solving
@@ -95,6 +95,7 @@ compilation will be put here.
 	original PetscBinaryIO class is provided in
 	`${PETSC_DIR}/bin/pythonscripts/`, where `${PETSC_DIR}` is your PETSc install
 	directory.
+	+ `visual/rundiff.py` -- A tool to calculate difference of two runs
 
 
 ### Input preparation
@@ -102,10 +103,9 @@ compilation will be put here.
 PIC1D-PETSc reads input parameters from `src/pic1dp_input.F90`.  Each parameter
 has detailed description in the comment lines above it.
 
-The default `src/pic1dp_input.F90` gives a Bohm-Gross wave with wave vector k =
-0.4.  Theoretical result gives real frequency = 1.28505698 and Landau damping
-rate = -0.06612800 (negative sign indicates damping).  Numbers are normalized
-by electron Debye length and plasma oscillation frequency, respectively.
+The default `src/pic1dp_input.F90` gives an electron two-stream instability
+with 0 real frequency and growth rate being 0.141.  Numbers are normalized by
+electron plasma oscillation frequency.
 
 
 ### Compilation

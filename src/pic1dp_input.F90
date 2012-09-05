@@ -43,7 +43,7 @@ PetscReal, parameter :: input_time_max = 100.0_kpr
 PetscInt, parameter :: input_linear = 0
 
 ! length in real space (normalized by electron Debye length)
-!PetscReal, parameter :: input_lx = 15.708  ! k = 0.4
+!PetscReal, parameter :: input_lx = 15.708_kpr  ! k = 0.4
 PetscReal, parameter :: input_lx = 4.0_kpr * 3.141592653589793238_kpr
 
 ! equilibrium particle velocity distribution.
