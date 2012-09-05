@@ -41,7 +41,7 @@ run : pic1dp clean
 pic1dp : ../build/pic1dp
 	cp ../build/pic1dp ./
 
-../build/pic1dp : $(wildcard ../src/*)
+../build/pic1dp : $(wildcard ../src/*) ../build/Makefile
 	$(MAKE) -C ../build -j $(NPE_BUILD) build
 
 clean :
