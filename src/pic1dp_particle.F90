@@ -151,7 +151,8 @@ do ispecies = 1, input_nspecies
   call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
   CHKERRQ(global_ierr)
 
-  if (input_imarker == 1) then ! (shifted) Maxwellian in velocity space
+  if (input_imarker == 1) then ! load markers same as physical distribution
+    ! currently only supports input_iptcldist == 1: (shifted) Maxwellian
     call gaussian_generate(pv)
     pv(:) = pv(:) * sqrt(input_species_temperature(ispecies) &
       / input_species_mass(ispecies)) + input_species_v0(ispecies)
@@ -159,11 +160,6 @@ do ispecies = 1, input_nspecies
   else ! input_imarker == 2, uniform in velocity space
     call random_number(pv)
     pv(:) = (pv(:) - 0.5_kpr) * 2.0_kpr * input_v_max
-!    do ip = particle_ip_low, particle_ip_high - 1
-!      pv(ip - particle_ip_low + 1) = (real(ip - particle_ip_low, kpr) &
-!        / (particle_ip_high - particle_ip_low - 1) * 2.0_kpr - 1.0_kpr) &
-!        * input_v_max
-!    end do
     if (input_iptcldist == 1) then ! two-stream1
       pp(:) = input_species_density(ispecies) * input_lx / input_nparticle &
         * pv(:)**2 * exp(-pv(:)**2 / 2.0_kpr) / sqrt(2.0_kpr * PETSC_PI) &
@@ -186,11 +182,10 @@ do ispecies = 1, input_nspecies
         * 2.0_kpr * input_v_max
     end if
   end if
-!  write (*,*) pp(:)
 
+  ! uniform in x
   call random_number(px)
   px(:) = px(:) * input_lx
-!  px(:) = 1.0_kpr
 
   pw(:) = 0.0_kpr
   do imode = 0, input_init_nmode - 1
@@ -216,22 +211,13 @@ do ispecies = 1, input_nspecies
   call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
   CHKERRQ(global_ierr)
 
-  ! for linear, p = f_0 / g; for nonlinear, p = f / g
+  ! for linear, p = f_0 / g; for nonlinear, p = f / g = f_0 / g + delta f / g
   if (input_linear == 0) then
     call VecAXPY(particle_p(ispecies), &
       1.0_kpr, particle_w(ispecies), global_ierr)
     CHKERRQ(global_ierr)
   end if
 end do
-
-!  call VecView(particle_x(1), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call VecView(particle_v(1), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call VecView(particle_p(1), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
-!  call VecView(particle_w(1), PETSC_VIEWER_STDOUT_WORLD, global_ierr)
-!  CHKERRQ(global_ierr)
 
 end subroutine particle_load
 
@@ -325,7 +311,7 @@ use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
 
-PetscScalar, dimension(0 : input_output_nv - 1) :: &
+PetscScalar, dimension(0 : input_nv - 1) :: &
   ptcldist_pertb_v, ptcldist_pertb_v_redu
 
 PetscScalar, dimension(:), pointer :: pv, pw, ps
@@ -352,7 +338,7 @@ do ispecies = 1, input_nspecies
     if (abs(pv(ip)) >= input_v_max) cycle
 
     sv = (pv(ip) + input_v_max) &
-      / (input_v_max * 2.0_kpr) * (input_output_nv - 1)
+      / (input_v_max * 2.0_kpr) * (input_nv - 1)
     iv = floor(sv)
     sv = 1.0_kpr - (sv - real(iv, kpr))
 
@@ -364,7 +350,7 @@ do ispecies = 1, input_nspecies
   end do ! ip = 1, particle_ip_high - particle_ip_low
 
   call MPI_Allreduce(ptcldist_pertb_v, ptcldist_pertb_v_redu, &
-    input_output_nv, MPIU_SCALAR, MPI_SUM, MPI_COMM_WORLD, global_ierr)
+    input_nv, MPIU_SCALAR, MPI_SUM, MPI_COMM_WORLD, global_ierr)
   CHKERRQ(global_ierr)
 
   df_thsh_res = maxval(ptcldist_pertb_v_redu) * particle_df_thsh_res_frac
@@ -377,7 +363,7 @@ do ispecies = 1, input_nspecies
     if (abs(pv(ip)) >= input_v_max) cycle
 
     sv = (pv(ip) + input_v_max) &
-      / (input_v_max * 2.0_kpr) * (input_output_nv - 1)
+      / (input_v_max * 2.0_kpr) * (input_nv - 1)
     iv = floor(sv)
     sv = 1.0_kpr - (sv - real(iv, kpr))
 
@@ -421,7 +407,7 @@ PetscScalar, dimension(:), pointer :: px, pv, pp, pw, ps
 PetscScalar :: sx, sv
 
 nx = input_nx * 2
-nv = input_output_nv * 2
+nv = input_nv * 2
 
 allocate (ipbin(0 : nx - 1, 0 : nv - 1, 2, 1))
 allocate (ipbin_top(0 : nx - 1, 0 : nv - 1, 2))
@@ -447,6 +433,11 @@ do ispecies = 1, input_nspecies
     ! ignore too fast particle
     if (abs(pv(ip)) >= input_v_max) cycle
 
+    ! enforce periodic boundary condition
+    px(ip) = mod(px(ip), input_lx)
+    ! if x is negative, mod gives negative result, so shift it to positive
+    if (px(ip) < 0.0_kpr) px(ip) = px(ip) + input_lx
+
     sx = px(ip) / input_lx * nx
     ix = floor(sx)
     sv = (pv(ip) + input_v_max) / (input_v_max * 2.0_kpr) * (nv - 1)
@@ -466,10 +457,6 @@ do ispecies = 1, input_nspecies
       px(ip1) = (pw(ip1) * px(ip1) + pw(ip) * px(ip)) / (pw(ip1) + pw(ip))
       ! no need to enforce boundary condition as it will be enforced
       ! in particle_compute_shape_x or interaction_collect_charge
-!      if (abs((pw(ip1) * pv(ip1) + pw(ip) * pv(ip)) / (pw(ip1) + pw(ip))) > 2.0_kpr * input_v_max) then
-!        write (*, *) 'large v: pw(ip1), pv(ip1), pw(ip), pv(ip), new pv(ip1): ', &
-!          pw(ip1), pv(ip1), pw(ip), pv(ip), (pw(ip1) * pv(ip1) + pw(ip) * pv(ip)) / (pw(ip1) + pw(ip))
-!      end if
       pv(ip1) = (pw(ip1) * pv(ip1) + pw(ip) * pv(ip)) / (pw(ip1) + pw(ip))
       pp(ip1) = pp(ip1) + pp(ip)
       pw(ip1) = pw(ip1) + pw(ip)

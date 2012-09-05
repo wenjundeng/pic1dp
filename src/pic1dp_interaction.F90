@@ -87,7 +87,6 @@ else
     if (input_iptclshape == 4) then
       call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
       CHKERRQ(global_ierr)
-      !write (*, *) 'size of px', size(px)
     end if
     call VecGetArrayF90(particle_s(ispecies), ps, global_ierr)
     CHKERRQ(global_ierr)
@@ -143,13 +142,10 @@ else
   ! copy values from field_arr_charge1 to field_chargeden
   call VecGetArrayF90(field_chargeden, pc, global_ierr)
   CHKERRQ(global_ierr)
-!  do ix = field_ix_low, field_ix_high - 1
-!    pc(ix - field_ix_low + 1) = field_arr_charge1(ix) * input_nx / input_lx
-!  end do
   pc(1 : field_ix_high - field_ix_low) &
     = field_arr_charge1(field_ix_low : field_ix_high - 1) * input_nx / input_lx
   if (input_deltaf == 0) then
-    ! nonlinear case, subtract equilibrium charge density
+    ! full-f case, subtract equilibrium charge density
     do ispecies = 1, input_nspecies
       pc(:) = pc(:) &
         - input_species_charge(ispecies) * input_species_density(ispecies)
@@ -217,8 +213,8 @@ end if
 call wtimer_stop(22)
 
 do ispecies = 1, input_nspecies
-  ! calculate electric field at particle if 
   if (input_iptclshape < 3) then
+    ! calculate electric field at particle if using PETSc for shape matrix
     call MatMult(particle_shape_x(ispecies), field_electric, &
       particle_electric, global_ierr)
     CHKERRQ(global_ierr)
@@ -263,7 +259,6 @@ do ispecies = 1, input_nspecies
         ix = floor(sx)
         sx = 1.0_kpr - (sx - real(ix, kpr))
       end if
-!      if (global_mype == 0 .and. ip == particle_ip_low) write (*, *) ix, sx
       electric = pe(ix + 1) * sx
       ix = ix + 1
       if (ix > input_nx - 1) ix = 0

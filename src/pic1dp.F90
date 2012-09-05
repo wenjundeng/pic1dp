@@ -137,6 +137,27 @@ do while (itermination == 0)
     call interaction_push_particle(irk)
     call wtimer_stop(iwt_push_particle)
 
+    ! merge non-resonant particles
+    if (input_deltaf == 1 &
+      .and. imerge > 0 .and. imerge <= size(input_tmerge)) then
+      if (global_time + input_dt >= input_tmerge(imerge) .and. irk == 2) then
+        call wtimer_start(iwt_particle_merge)
+        ! set resonant fraction threshold
+        !particle_df_thsh_res_frac = 0.2_kpr
+        particle_df_thsh_res_frac = 0.01_kpr * imerge
+        ! detect and mark resonant particles
+        call particle_detect_resonant
+        ! perform merging
+        call particle_merge
+        call wtimer_stop(iwt_particle_merge)
+        ! print out information
+        call wtimer_start(iwt_output)
+        call output_progress(1)
+        call wtimer_stop(iwt_output)
+        imerge = imerge + 1
+      end if
+    end if
+
     if (input_iptclshape < 4) then
       !call wtimer_start(21)
       !call particle_zeroshape_x
@@ -161,48 +182,6 @@ do while (itermination == 0)
   global_itime = global_itime + 1
   global_time = global_time + input_dt
 
-  ! merge particles
-  if (input_deltaf == 1 &
-    .and. imerge > 0 .and. imerge <= size(input_tmerge)) then
-    if (global_time > input_tmerge(imerge)) then
-      !! set w threashold
-      !particle_merge_w_threshold = 0.1_kpr * imerge
-
-      call wtimer_start(iwt_particle_merge)
-      ! set resonant fraction threshold
-      !particle_df_thsh_res_frac = 0.2_kpr
-      particle_df_thsh_res_frac = 0.01_kpr * imerge
-      ! detect and mark resonant particles
-      call particle_detect_resonant
-      ! perform merging
-      call particle_merge
-      call wtimer_stop(iwt_particle_merge)
-
-      if (input_verbosity >= 1) then
-        write (global_msg, '(a, i9, a, i9, a)') &
-          'Info: particle_merge reduced # of particles:', &
-          sum(particle_nredu), '; left:', &
-          input_nparticle * input_nspecies - sum(particle_nredu), "\n"
-        call global_pp(global_msg)
-      end if
-      imerge = imerge + 1
-
-      ! refresh charge density and electric field
-      if (input_iptclshape < 4) then
-        ! update particle shape matrix
-        call wtimer_start(iwt_particle_shape)
-        call particle_compute_shape_x
-        call wtimer_stop(iwt_particle_shape)
-      end if
-      call wtimer_start(iwt_collect_charge)
-      call interaction_collect_charge
-      call wtimer_stop(iwt_collect_charge)
-      call wtimer_start(iwt_field_electric)
-      call field_solve_electric
-      call wtimer_stop(iwt_field_electric)
-    end if
-  end if
-
   ! check if needs to terminate
   itermination = check_termination()
 
@@ -213,7 +192,7 @@ do while (itermination == 0)
     ) < mod( &
       global_time + PETSc_SQRT_MACHINE_EPSILON - input_dt, input_output_interval &
     ) & ! time just passed a full interval
-    .or. itermination == 1 &
+    .or. itermination == 1 & ! final time step
   ) then
     call wtimer_start(iwt_output)
     call output_all

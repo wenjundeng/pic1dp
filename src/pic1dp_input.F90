@@ -60,7 +60,7 @@ PetscInt, parameter :: input_nspecies = 1
 ! temperature (normalized by electron temperature),
 ! density (normalized by electron equilibrium density),
 ! and equilibrium flow (normalized by electron thermal velocity)
-! temperature and equilibrium flow are not used for two-stream distribution
+! temperature and equilibrium flow are not used for input_iptcldist = 1
 PetscReal, dimension(input_nspecies), parameter :: &
   input_species_charge = (/ -1.0_kpr /), &
   input_species_mass = (/ 1.0_kpr /), &
@@ -107,12 +107,11 @@ PetscInt, parameter :: input_deltaf = 1
 PetscReal, parameter :: input_dt = 0.1_kpr
 
 ! # of marker particles per species
-PetscInt, parameter :: input_nparticle = 6400000
+PetscInt, parameter :: input_nparticle = 3200000
 
 ! marker distribution in velocity space:
 ! 1: same as physical distribution; 2: uniform
-! if input_iptcldist = 1 (two-stream), input_imarker must be 2 (uniform)
-! the case of input_iptcldist = 1 and input_imarker = 1 is not implemented yet
+! if set to 1, now only input_iptcldist = 0 (shifted Maxwellian) is implemented
 PetscInt, parameter :: input_imarker = 2
 
 ! maximum velocity for uniform loading and for output
@@ -121,12 +120,15 @@ PetscReal, parameter :: input_v_max = 6.0_kpr
 ! # of grid points in real space
 PetscInt, parameter :: input_nx = 64
 
-! # of times of merging particles
+! # of grid points in velocity space for output and resonant detection
+PetscInt, parameter :: input_nv = 128
+
+! # of times of merging particles (set to 0 to disable merging)
 PetscInt, parameter :: input_nmerge = 30
 
 ! list of times to merge particles, must be in ascending order
 PetscReal, dimension(input_nmerge), parameter :: &
-!  input_tmerge = 0.0_kpr
+!  input_tmerge = 0.0_kpr ! if input_nmerge = 0, use this line
 !  input_tmerge = (/ 30.0_kpr /)
 !  input_tmerge = (/ 30.0_kpr, 32.0_kpr, 34.0_kpr, 36.0_kpr /)
   input_tmerge = (/ 20.0_kpr, 21.0_kpr, 22.0_kpr, 23.0_kpr, 24.0_kpr, &
@@ -164,9 +166,6 @@ PetscInt, parameter :: input_verbosity = 1
 ! time interval between data output (normalized by 1 / omega_pe)
 PetscReal, parameter :: input_output_interval = 0.5_kpr
 
-! # of velocity grid for output
-PetscInt, parameter :: input_output_nv = 128
-
 contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -179,14 +178,18 @@ PetscInt, intent(in) :: ispecies
 
 PetscScalar :: omega_r, omega_i, k
 
-!input_pertb_shape = v**30 * exp(-v * v) * 1e-8_kpr
-
 ! for constant 1.0, the perturbation shape is the same as the marker particle
 ! distribution in velocity space
 input_pertb_shape = 1.0_kpr
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! below are other testing shapes !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! random noise
 !call random_number(input_pertb_shape)
 !input_pertb_shape = input_pertb_shape - 0.5
+
+!input_pertb_shape = v**30 * exp(-v * v) * 1e-8_kpr
 
 !k = 0.4_kpr
 !omega_r = 1.10625_kpr
