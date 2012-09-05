@@ -25,7 +25,7 @@ endif
 
 # compiling options
 ifndef FFLAGS
-#	FFLAGS := -g -fbounds-check  # for debugging
+#	FFLAGS := -g -fbounds-check -ffpe-trap=invalid,zero,overflow # for debugging
 	FFLAGS := -O2
 endif
 
