@@ -240,6 +240,7 @@ class VisualApp:
 
         # layout
         self._fig = plt.figure(figsize = (22, 11))
+        self._fig.canvas.set_window_title(os.path.abspath(datapath))
         # plots
         self._ax_scalar_t = self._fig.add_axes([0.04, 0.53, 0.18, 0.44])
         self._ax_mode_t = self._fig.add_axes([0.04, 0.045, 0.18, 0.44])
@@ -252,9 +253,13 @@ class VisualApp:
         self._ax_ptcldist_v = self._fig.add_axes([0.8, 0.045, 0.18, 0.44])
         # widgets
         self._ax_scalar_chooser = self._fig.add_axes([0.45, 0.85, 0.08, 0.1])
+        self._ax_scalar_chooser.set_title('scalar')
         self._ax_mode_chooser = self._fig.add_axes([0.45, 0.7, 0.08, 0.1])
+        self._ax_mode_chooser.set_title('Fourier mode')
         self._ax_ptcldist_chooser = self._fig.add_axes([0.45, 0.55, 0.08, 0.1])
+        self._ax_ptcldist_chooser.set_title('distribution')
         self._ax_species_chooser = self._fig.add_axes([0.45, 0.4, 0.08, 0.1])
+        self._ax_species_chooser.set_title('species')
         self._ax_ani_playpause = self._fig.add_axes([0.45, 0.25, 0.08, 0.04])
 
         # clicking on window: time chooser and time range chooser
