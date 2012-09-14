@@ -158,6 +158,8 @@ do ispecies = 1, input_nspecies
       energe = energe - 3.0_kpr * input_species_density(ispecies) * input_lx
     elseif (input_iptcldist == 2) then ! two-stream2
       ! need to calculate equilibrium energe for this case
+    elseif (input_iptcldist == 3) then ! bump-on-tail
+      ! need to calculate equilibrium energe for this case
     else ! (shifted) Maxwellian
       energe = energe - input_species_temperature(ispecies) &
         / input_species_mass(ispecies) * input_species_density(ispecies) &
@@ -400,6 +402,30 @@ do ispecies = 1, input_nspecies
             * input_species_temperature(ispecies) / input_species_mass(ispecies)))) &
             / (sqrt(8.0_kpr * PETSC_PI) * input_species_temperature(ispecies) &
             / input_species_mass(ispecies))
+        elseif (input_iptcldist == 3) then ! bump-on-tail
+          ptcldist_pertb_xv_redu(iv * input_nx : (iv + 1) * input_nx - 1) &
+            = ptcldist_total_xv_redu(iv * input_nx : (iv + 1) * input_nx - 1) &
+            - input_species_density(ispecies) &
+            * exp(-sv**2 / (2.0_kpr &
+            * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
+            / (sqrt(2.0_kpr * PETSC_PI) * input_species_temperature(ispecies) &
+            / input_species_mass(ispecies)) &
+            - (1.0_kpr - input_species_density(ispecies)) &
+            * exp(-(sv - input_species_v0(ispecies))**2 / (2.0_kpr &
+            * input_species_temperature2(ispecies) / input_species_mass(ispecies))) &
+            / (sqrt(2.0_kpr * PETSC_PI) * input_species_temperature2(ispecies) &
+            / input_species_mass(ispecies))
+          ptcldist_pertb_v_redu(iv) = ptcldist_total_v_redu(iv) - input_lx &
+            * (input_species_density(ispecies) &
+            * exp(-sv**2 / (2.0_kpr &
+            * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
+            / (sqrt(2.0_kpr * PETSC_PI) * input_species_temperature(ispecies) &
+            / input_species_mass(ispecies)) &
+            + (1.0_kpr - input_species_density(ispecies)) &
+            * exp(-(sv - input_species_v0(ispecies))**2 / (2.0_kpr &
+            * input_species_temperature2(ispecies) / input_species_mass(ispecies))) &
+            / (sqrt(2.0_kpr * PETSC_PI) * input_species_temperature2(ispecies) &
+            / input_species_mass(ispecies)))
         else ! (shifted) Maxwellian
           ptcldist_pertb_xv_redu(iv * input_nx : (iv + 1) * input_nx - 1) &
             = ptcldist_total_xv_redu(iv * input_nx : (iv + 1) * input_nx - 1) &
@@ -453,7 +479,7 @@ use pic1dp_particle
 implicit none
 #include "finclude/petsc.h90"
 
-! progress type. 0: regular; 1: merge particle output
+! progress type. 0: regular; 1: merge/throw away/split particle output
 PetscInt, intent(in) :: progress_type
 
 ! electric energe, has to be provided if progress_type = 0
@@ -476,8 +502,8 @@ if (input_verbosity == 1) then
     write (global_msg, '(a, f5.1, a, i7, f9.3, a, i9, a, i9, a)') &
       cprogress, progress(iprogress), "%%", global_itime, &
       global_time + input_dt, &
-      ' : merged ', sum(particle_nredu), '; left: ', &
-      input_nparticle * input_nspecies - sum(particle_nredu), "\n"
+      ' : merge/throw away/split increased ', sum(particle_ninc), '; current: ', &
+      sum(input_species_nparticle_init) + sum(particle_ninc), "\n"
   else ! regular progress type
     write (global_msg, '(a, f5.1, a, i7, f9.3, es12.3e3, a)') &
       cprogress, progress(iprogress), "%%", global_itime, global_time, &
@@ -487,9 +513,9 @@ if (input_verbosity == 1) then
 elseif (input_verbosity >= 2) then
   if (progress_type == 1) then
     write (global_msg, '(a, i9, a, i9, a)') &
-      'Info: particle_merge reduced # of particles:', &
-      sum(particle_nredu), '; left:', &
-      input_nparticle * input_nspecies - sum(particle_nredu), "\n"
+      'Info: particle_merge/throwaway/split increased # of particles:', &
+      sum(particle_ninc), '; current # of particles:', &
+      sum(input_species_nparticle_init) + sum(particle_ninc), "\n"
   else ! regular progress type
     write (global_msg, '(a, i7, a, f9.3, a)') 'Info: finished itime = ', &
       global_itime, ', time = ', global_time, "\n"

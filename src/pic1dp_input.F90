@@ -19,7 +19,7 @@
 ! module for managing input parameters and functions
 ! change input parameters in this file
 module pic1dp_input
-use pic1dp_global, only: kpr
+use pic1dp_global
 implicit none
 #include "finclude/petscdef.h"
 
@@ -32,7 +32,7 @@ implicit none
 PetscInt, parameter :: input_ntime_max = 900000
 
 ! maximum physical time (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_time_max = 100.0_kpr
+PetscReal, parameter :: input_time_max = 500.0_kpr
 
 
 !!!!!!!!!!!!!!!!!!!!!!!
@@ -44,13 +44,17 @@ PetscInt, parameter :: input_linear = 0
 
 ! length in real space (normalized by electron Debye length)
 !PetscReal, parameter :: input_lx = 15.708_kpr  ! k = 0.4
-PetscReal, parameter :: input_lx = 4.0_kpr * 3.141592653589793238_kpr
+!PetscReal, parameter :: input_lx = 20.0_kpr * 3.141592653589793238_kpr
+!PetscReal, parameter :: input_lx = 20.94395_kpr
+PetscReal, parameter :: &
+  input_lx = 2.0_kpr * 3.141592653589793238_kpr / 0.36_kpr
 
 ! equilibrium particle velocity distribution.
-! 0: (shifted) Maxwellian; 1: two-stream1; 2: two-stream2
+! 0: (shifted) Maxwellian; 1: two-stream1; 2: two-stream2; 3: bump-on-tail
 ! two-stream1: f(v) = 1/sqrt(2 pi) * v**2 * exp(-v**2 / 2)
 ! two-stream2: f(v) = 1/2 * (fm(v - v0) + fm(v + v0)); fm: Maxwellian
-PetscInt, parameter :: input_iptcldist = 2
+! bump-on-tail: f(v) = density * fm(v; T) + (1 - density) * fm(v - v0; T2)
+PetscInt, parameter :: input_iptcldist = 3
 
 ! # of particle species
 PetscInt, parameter :: input_nspecies = 1
@@ -61,12 +65,21 @@ PetscInt, parameter :: input_nspecies = 1
 ! density (normalized by electron equilibrium density),
 ! and equilibrium flow (normalized by electron thermal velocity)
 ! temperature and equilibrium flow are not used for input_iptcldist = 1
+! temperature2 is the beam temperature for input_iptcldist = 3
+!PetscReal, dimension(input_nspecies), parameter :: &
+!  input_species_charge = (/ -1.0_kpr, -1.0_kpr /), &
+!  input_species_mass = (/ 1.0_kpr, 1.0_kpr /), &
+!  input_species_temperature = (/ 1.0_kpr, 0.25_kpr /), &
+!  input_species_temperature2 = (/ 1.0_kpr, 1.0_kpr /), &
+!  input_species_density = (/ 0.90_kpr, 0.10_kpr /), &
+!  input_species_v0 = (/ 0.0_kpr, 4.5_kpr /)
 PetscReal, dimension(input_nspecies), parameter :: &
   input_species_charge = (/ -1.0_kpr /), &
   input_species_mass = (/ 1.0_kpr /), &
-  input_species_temperature = (/ 0.5_kpr /), &
-  input_species_density = (/ 1.0_kpr /), &
-  input_species_v0 = (/ sqrt(2.0_kpr) /)
+  input_species_temperature = (/ 1.0_kpr /), &
+  input_species_temperature2 = (/ 1.0_kpr /), &
+  input_species_density = (/ 0.9_kpr /), &
+  input_species_v0 = (/ 5.0_kpr /)
 
 ! # of modes kept
 PetscInt, parameter :: input_nmode = 1
@@ -89,11 +102,10 @@ PetscInt, dimension(0 : input_init_nmode - 1), parameter :: &
 
 ! initial amplitude of each mode (cos and sin part)
 ! note that the initial distribution in velocity space depends on
-! marker distribution input_imarker and initial perturbation shape function
-! input_pertb_shape(v)
+! initial perturbation shape function input_pertb_shape(v)
 PetscScalar, dimension(0 : input_init_nmode - 1), parameter :: &
-  input_init_mode_cos = (/ 0e-5_kpr /), &
-  input_init_mode_sin = (/ 1e-4_kpr /)
+  input_init_mode_cos = (/ 0.00_kpr /), &
+  input_init_mode_sin = (/ 1e-5_kpr /)
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!
@@ -104,10 +116,16 @@ PetscScalar, dimension(0 : input_init_nmode - 1), parameter :: &
 PetscInt, parameter :: input_deltaf = 1
 
 ! initial time step (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_dt = 0.1_kpr
+PetscReal, parameter :: input_dt = 0.05_kpr
 
-! # of marker particles per species
-PetscInt, parameter :: input_nparticle = 3200000
+! allocation for # of marker particles per species
+! this is also the maximum allowed # of marker particles during simulation
+PetscInt, parameter :: input_nparticle_max = 6400000
+
+! # of initial loaded particles for each species
+PetscInt, dimension(input_nspecies), parameter :: &
+!  input_species_nparticle_init = (/ 3200000, 3200000 /)
+  input_species_nparticle_init = (/ 0800000 /)
 
 ! marker distribution in velocity space:
 ! 1: same as physical distribution; 2: uniform
@@ -115,7 +133,7 @@ PetscInt, parameter :: input_nparticle = 3200000
 PetscInt, parameter :: input_imarker = 2
 
 ! maximum velocity for uniform loading and for output
-PetscReal, parameter :: input_v_max = 6.0_kpr
+PetscReal, parameter :: input_v_max = 8.0_kpr
 
 ! # of grid points in real space
 PetscInt, parameter :: input_nx = 64
@@ -123,20 +141,41 @@ PetscInt, parameter :: input_nx = 64
 ! # of grid points in velocity space for output and resonant detection
 PetscInt, parameter :: input_nv = 128
 
-! # of times of merging particles (set to 0 to disable merging)
-PetscInt, parameter :: input_nmerge = 30
+! # of times of merging particles
+! (set to 0 to disable merging)
+PetscInt, parameter :: input_nmerge = 0
 
 ! list of times to merge particles, must be in ascending order
 PetscReal, dimension(input_nmerge), parameter :: &
-!  input_tmerge = 0.0_kpr ! if input_nmerge = 0, use this line
-!  input_tmerge = (/ 30.0_kpr /)
-!  input_tmerge = (/ 30.0_kpr, 32.0_kpr, 34.0_kpr, 36.0_kpr /)
-  input_tmerge = (/ 20.0_kpr, 21.0_kpr, 22.0_kpr, 23.0_kpr, 24.0_kpr, &
-    25.0_kpr, 26.0_kpr, 27.0_kpr, 28.0_kpr, 29.0_kpr, &
-    30.0_kpr, 31.0_kpr, 32.0_kpr, 33.0_kpr, 34.0_kpr, &
-    35.0_kpr, 36.0_kpr, 37.0_kpr, 38.0_kpr, 39.0_kpr, &
-    40.0_kpr, 41.0_kpr, 42.0_kpr, 43.0_kpr, 44.0_kpr, &
-    45.0_kpr, 46.0_kpr, 47.0_kpr, 48.0_kpr, 49.0_kpr /)
+  input_tmerge = (/ (50.0_kpr + global_itime * 0.5_kpr, &
+    global_itime = 1, input_nmerge) /)
+
+! # of times of throwing away particles
+! (set to 0 to disable throwing away)
+PetscInt, parameter :: input_nthrowaway = 1
+
+! list of times to throw away particles, must be in ascending order
+PetscReal, dimension(input_nthrowaway), parameter :: &
+  input_tthrowaway = (/ (50.0_kpr + global_itime * 0.5_kpr, &
+    global_itime = 1, input_nthrowaway) /)
+
+! fraction of non-resonant particles to be thrown away
+PetscReal, parameter :: input_throwaway_frac = 0.9_kpr
+
+! # of times of splitting particles
+! (set to 0 to disable splitting)
+PetscInt, parameter :: input_nsplit = 0
+
+! list of times to split particles, must be in ascending order
+PetscReal, dimension(input_nsplit), parameter :: &
+  input_tsplit = (/ (50.0_kpr + global_itime * 0.5_kpr, &
+    global_itime = 1, input_nsplit) /)
+
+! # of groups for splitting particles
+PetscInt, parameter :: input_split_ngroup = 5
+
+! variation of change in v in terms of fraction of grid size
+PetscReal, parameter :: input_split_dv_sig_frac = 1.0_kpr
 
 ! particle shape calculation
 ! 1: use PETSc matrix for shape matrix, destroy and re-create matrix every time
@@ -164,7 +203,7 @@ PetscInt, parameter :: input_seed_type = 2
 PetscInt, parameter :: input_verbosity = 1
 
 ! time interval between data output (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_output_interval = 0.5_kpr
+PetscReal, parameter :: input_output_interval = 0.25_kpr
 
 contains
 

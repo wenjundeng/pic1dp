@@ -35,6 +35,7 @@ PetscInt, parameter :: kpr = kind(testkindPetscReal)
 !!!!!!!!!!!!!!!!!!!!!
 
 PetscInt :: global_mype ! rank of current MPI process
+PetscInt :: global_npe ! # of MPI processes
 PetscErrorCode :: global_ierr ! for storing MPI and PETSc error code
 character(len = 5000) :: global_msg ! for messages and temporary strings
 

@@ -39,17 +39,18 @@ PetscInt, parameter :: &
   iwt_particle_shape = 5, &
   iwt_collect_charge = 6, &
   iwt_field_electric = 7, &
-  iwt_particle_merge = 8, &
+  iwt_particle_mergesplit = 8, &
   iwt_output = 9, &
   iwt_final = 10
 
 PetscInt :: nrk ! # of Runge-Kutta sub-steps
 PetscInt :: irk ! indexing Runge-Kutta sub-steps
 
-PetscInt :: imerge ! indexing particle merge times
+! indexing particle merge, throw away, split times
+PetscInt :: imerge, ithrowaway, isplit
 
-! termination related variables
-PetscInt :: itermination ! status of termination condition: 0: not to terminate; 1: to terminate
+! status of termination condition: 0: not to terminate; 1: to terminate
+PetscInt :: itermination
 
 ! for wall clock timers
 character(len = 18), dimension(30) :: string_wt
@@ -64,13 +65,15 @@ call wtimer_start(iwt_total) ! start recording total time
 call wtimer_start(iwt_init)
 call MPI_Comm_rank(MPI_COMM_WORLD, global_mype, global_ierr)
 CHKERRQ(global_ierr)
+call MPI_Comm_size(MPI_COMM_WORLD, global_npe, global_ierr)
+CHKERRQ(global_ierr)
 if (input_verbosity >= 1) &
   call global_pp("PIC1D-PETSc version " // version // "\n")
 ! check input parameters
 if (&
-  (input_iptcldist == 1 .or. input_iptcldist == 2) .and. input_imarker == 1 &
+  input_iptcldist >= 1 .and. input_imarker == 1 &
 ) then
-  call global_pp("Error: case of input_iptcldist = 1 or 2 and input_")
+  call global_pp("Error: case of input_iptcldist >= 1 and input_")
   call global_pp("imarker = 1 not implemented yet.\n")
   stop 1
 end if
@@ -94,9 +97,8 @@ if (input_iptclshape < 4) then
   call wtimer_stop(iwt_particle_shape)
 end if
 if (input_verbosity >= 1) then
-  write (global_msg, '(a, i10, a, i2, a, i10, a)') &
-    'Info: loaded # of particles: ', input_nparticle, ' * ', input_nspecies, &
-    ' = ', input_nparticle * input_nspecies, "\n"
+  write (global_msg, '(a, i10, a)') &
+    'Info: loaded # of particles: ', sum(input_species_nparticle_init), "\n"
   call global_pp(global_msg)
 end if
 
@@ -106,6 +108,16 @@ if (input_nmerge > 0) then
   imerge = 1
 else
   imerge = 0
+end if
+if (input_nthrowaway > 0) then
+  ithrowaway = 1
+else
+  ithrowaway = 0
+end if
+if (input_nsplit > 0) then
+  isplit = 1
+else
+  isplit = 0
 end if
 
 ! solve initial field
@@ -141,22 +153,75 @@ do while (itermination == 0)
 
     ! merge non-resonant particles
     if (input_deltaf == 1 &
-      .and. imerge > 0 .and. imerge <= size(input_tmerge)) then
-      if (global_time + input_dt >= input_tmerge(imerge) .and. irk == 2) then
-        call wtimer_start(iwt_particle_merge)
-        ! set resonant fraction threshold
-        !particle_df_thsh_res_frac = 0.2_kpr
-        particle_df_thsh_res_frac = 0.01_kpr * imerge
+      .and. imerge > 0 .and. imerge <= input_nmerge) then
+      if ( &
+        global_time + input_dt >= input_tmerge(imerge) &
+        .and. irk == 2 &
+      ) then
+        call wtimer_start(iwt_particle_mergesplit)
         ! detect and mark resonant particles
-        call particle_detect_resonant
+        call particle_detect_resonant( &
+          0.3_kpr, &
+          0.1_kpr / max(input_nmerge, 1) * real(imerge, kpr) &
+        )
         ! perform merging
         call particle_merge
-        call wtimer_stop(iwt_particle_merge)
+        call wtimer_stop(iwt_particle_mergesplit)
         ! print out information
         call wtimer_start(iwt_output)
         call output_progress(1)
         call wtimer_stop(iwt_output)
         imerge = imerge + 1
+      end if
+    end if
+
+    ! throw away some non-resonant particles
+    if (input_deltaf == 1 &
+      .and. ithrowaway > 0 .and. ithrowaway <= input_nthrowaway) then
+      if ( &
+        global_time + input_dt >= input_tthrowaway(ithrowaway) &
+        .and. irk == 2 &
+      ) then
+        call wtimer_start(iwt_particle_mergesplit)
+        ! detect and mark resonant particles
+        call particle_detect_resonant( &
+          0.3_kpr, &
+          0.1_kpr / max(input_nthrowaway, 1) * real(ithrowaway, kpr) &
+        )
+        ! perform throwing away
+        call particle_throwaway
+        call wtimer_stop(iwt_particle_mergesplit)
+        ! print out information
+        call wtimer_start(iwt_output)
+        call output_progress(1)
+        call wtimer_stop(iwt_output)
+        ithrowaway = ithrowaway + 1
+      end if
+    end if
+
+    ! split resonant particles
+    if (input_deltaf == 1 &
+      .and. isplit > 0 .and. isplit <= input_nsplit) then
+      if ( &
+        global_time + input_dt >= input_tsplit(isplit) &
+        .and. irk == 2 &
+      ) then
+        call wtimer_start(iwt_particle_mergesplit)
+        ! detect and mark resonant particles
+        call particle_detect_resonant( &
+          1.0_kpr - 0.8_kpr / max(input_nsplit, 1) &
+            * real(isplit, kpr), &
+          !0.3_kpr, &
+          0.1_kpr &
+        )
+        ! perform splitting
+        call particle_split
+        call wtimer_stop(iwt_particle_mergesplit)
+        ! print out information
+        call wtimer_start(iwt_output)
+        call output_progress(1)
+        call wtimer_stop(iwt_output)
+        isplit = isplit + 1
       end if
     end if
 
@@ -237,14 +302,14 @@ if (input_verbosity >= 1) then
     // string_wt(iwt_field_electric) // string_wt(iwt_output) // "\n")
 
   call global_pp( &
-    "   particle merge     finalization    MPI_Allreduce          scatter\n")
-  call wtimer_print(iwt_particle_merge, string_wt(iwt_particle_merge), iwt_total, .true.)
+    " ptcl split/merge     finalization    MPI_Allreduce          scatter\n")
+  call wtimer_print(iwt_particle_mergesplit, &
+    string_wt(iwt_particle_mergesplit), iwt_total, .true.)
   call wtimer_print(iwt_final, string_wt(iwt_final), iwt_total, .true.)
   call wtimer_print(21, string_wt(21), iwt_total, .true.)
   call wtimer_print(22, string_wt(22), iwt_total, .true.)
-  call global_pp(string_wt(iwt_particle_merge) // string_wt(iwt_final) // &
-    string_wt(21) // string_wt(22) // "\n")
-!  call global_pp(string_wt(iwt_final) // "\n")
+  call global_pp(string_wt(iwt_particle_mergesplit) // string_wt(iwt_final) &
+    // string_wt(21) // string_wt(22) // "\n")
 end if
 
 call PetscFinalize(global_ierr)

@@ -168,7 +168,7 @@ implicit none
 PetscInt, intent(in) :: irk ! index of Runge-Kutta sub-step
 
 PetscInt :: ispecies, ix
-PetscInt :: ip
+PetscInt :: ip !, ip_dbg = 7
 PetscScalar :: sx, electric, tmp1, tmp2
 PetscScalar, dimension(:), pointer :: pe, pptcl, ppe, px, pv, pp, pw, ps
 PetscScalar, dimension(:), pointer :: pxb, pvb, pwb
@@ -241,6 +241,11 @@ do ispecies = 1, input_nspecies
     ! ignore invalid particles
     if (ps(ip) < -0.5_kpr) cycle
 
+!    if (global_mype == 0 .and. ip == ip_dbg) then
+!      write (*, *) 'before push, [', ispecies, irk, '], x=', px(ip), 'v=', pv(ip)
+!      write (*, *) 'p=', pp(ip), 'w=', pw(ip)
+!    end if
+
     ! get electric field at particle
     if (input_iptclshape <= 2) then
       electric = ppe(ip)
@@ -275,6 +280,9 @@ do ispecies = 1, input_nspecies
       else
         tmp1 = (pp(ip) - pw(ip)) * electric
       end if
+!      if (global_mype == 0 .and. ip == ip_dbg) then
+!        write (*, *) 'tmp1=', tmp1
+!      end if
 
       ! calculate -d f_0 / d v / f_0 and store in tmp2
       if (input_iptcldist == 1) then ! two-stream1
@@ -295,12 +303,44 @@ do ispecies = 1, input_nspecies
           * input_species_temperature(ispecies) &
           / input_species_mass(ispecies)))) &
           * input_species_mass(ispecies) / input_species_temperature(ispecies)
+      elseif (input_iptcldist == 3) then ! bump-on-tail
+        tmp2 = (input_species_density(ispecies) * pv(ip) / &
+          (input_species_temperature(ispecies) &
+          / input_species_mass(ispecies)) &
+          * exp(-pv(ip)**2 / (2.0_kpr &
+          * input_species_temperature(ispecies) &
+          / input_species_mass(ispecies))) &
+          / sqrt(input_species_temperature(ispecies) &
+          / input_species_mass(ispecies)) &
+          + (1.0_kpr - input_species_density(ispecies)) &
+          * (pv(ip) - input_species_v0(ispecies)) / &
+          (input_species_temperature2(ispecies) &
+          / input_species_mass(ispecies)) &
+          * exp(-(pv(ip) - input_species_v0(ispecies))**2 / (2.0_kpr &
+          * input_species_temperature2(ispecies) &
+          / input_species_mass(ispecies))) &
+          / sqrt(input_species_temperature2(ispecies) &
+          / input_species_mass(ispecies))) &
+          / (input_species_density(ispecies) * exp(-pv(ip)**2 / (2.0_kpr &
+          * input_species_temperature(ispecies) &
+          / input_species_mass(ispecies))) &
+          / sqrt(input_species_temperature(ispecies) &
+          / input_species_mass(ispecies)) &
+          + (1.0_kpr - input_species_density(ispecies)) &
+          * exp(-(pv(ip) - input_species_v0(ispecies))**2 / (2.0_kpr &
+          * input_species_temperature2(ispecies) &
+          / input_species_mass(ispecies))) &
+          / sqrt(input_species_temperature2(ispecies) &
+          / input_species_mass(ispecies)))
       else ! (shifted) Maxwellian
         tmp2 = (pv(ip) - input_species_v0(ispecies)) &
-          * input_species_temperature(ispecies) &
-          / input_species_mass(ispecies)
+          / (input_species_temperature(ispecies) &
+          / input_species_mass(ispecies))
       end if
       ! end of calculating -d f_0 / d v / f_0 and storing in tmp2
+!      if (global_mype == 0 .and. ip == ip_dbg) then
+!        write (*, *) 'tmp2=', tmp2
+!      end if
 
       pw(ip) = pwb(ip) + dt * tmp1 * tmp2 * input_species_charge(ispecies) &
         / input_species_mass(ispecies)
@@ -312,6 +352,10 @@ do ispecies = 1, input_nspecies
       pv(ip) = pvb(ip) + dt * electric * input_species_charge(ispecies) &
         / input_species_mass(ispecies)
     end if 
+!    if (global_mype == 0 .and. ip == ip_dbg) then
+!      write (*, *) 'after push, [', ispecies, irk, '], x=', px(ip), 'v=', pv(ip)
+!      write (*, *) 'p=', pp(ip), 'w=', pw(ip)
+!    end if
   end do ! ip = 1, particle_ip_high - particle_ip_high
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
