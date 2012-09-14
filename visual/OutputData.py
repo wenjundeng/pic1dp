@@ -21,7 +21,8 @@ class OutputData:
 
         # generate arrays for axises
         self.x = np.arange(self.nx + 1.0) / self.nx * self.lx
-        self.v = (np.arange(self.nv + 0.0) / (self.nv - 1) - 0.5) * 2.0 * self.v_max
+        self.v = (np.arange(self.nv + 0.0) / (self.nv - 1) - 0.5) \
+            * 2.0 * self.v_max
         self.xv = np.meshgrid(self.x, self.v)
 
         # read time dependent data
@@ -126,4 +127,33 @@ class OutputData:
             for i in range(self.nspecies):
                 ret += rawdata[8 + i * 6 + iptcldist]
             return ret
+
+    def growthrate_energe_fit(self, time1, time2):
+        '''calculate growth rate using data between time1 and time2'''
+        scalar_t = self.get_scalar_t()
+        itime1 = np.searchsorted(scalar_t[0], time1) - 1
+        itime2 = np.searchsorted(scalar_t[0], time2)
+        t = scalar_t[0, itime1 : itime2]
+        energe = scalar_t[1, itime1 : itime2]
+
+        # fit growthrate
+        n = itime2 - itime1
+        lnenerge = np.log(energe)
+        sum_t = np.sum(t)
+        sum_lnenerge = np.sum(lnenerge)
+        sum_tlnenerge = np.sum(t * lnenerge)
+        sum_t2 = np.sum(t * t)
+        gamma = (n * sum_tlnenerge - sum_t * sum_lnenerge) \
+            / (n * sum_t2 - sum_t * sum_t)
+        return gamma
+
+    def findpeak_energe(self, time1, time2):
+        '''find peak using data between time1 and time2'''
+        scalar_t = self.get_scalar_t()
+        itime1 = np.searchsorted(scalar_t[0], time1) - 1
+        itime2 = np.searchsorted(scalar_t[0], time2)
+        t = scalar_t[0, itime1 : itime2]
+        energe = scalar_t[1, itime1 : itime2]
+        peakindex = np.argmax(energe)
+        return [t[peakindex], energe[peakindex]]
 
