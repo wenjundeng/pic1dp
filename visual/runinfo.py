@@ -68,7 +68,7 @@ for irun in range(len(args.datapaths)):
         intengdiffdt /= 2.0
         print 'int |energe - energe_ref| dt = ', intengdiffdt
         print 'int |energe - energe_ref| dt / int energe_ref dt = ', \
-            intengdiffdt / intengdt_ref
+            intengdiffdt / intengdt_ref * 100.0, '%'
 
     # calculate growth rate
     if args.gr is not None:
