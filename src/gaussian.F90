@@ -50,27 +50,40 @@ integer(kind = gik), intent(in) :: seed_type
 ! same random number sequence
 integer(kind = gik), intent(in), optional :: mype
 
-integer(kind = gik) :: clock, iseed
+integer, parameter :: nprime = 30
+integer, dimension(nprime), parameter :: primes = (/ &
+  7649, 7669, 7673, 7681, 7687, 7691, 7699, 7703, 7717, 7723, &
+  7727, 7741, 7753, 7757, 7759, 7789, 7793, 7817, 7823, 7829, &
+  7841, 7853, 7867, 7873, 7877, 7879, 7883, 7901, 7907, 7919 /)
 
-! the following two variables need to be of default kind for random_seed()
-integer :: nseed
+integer :: clock, iseed, nseed
 integer, dimension(:), allocatable :: seeds
+
+real(kind = grk), dimension(:), allocatable :: rseeds
 
 ! initialize random number seeds
 call random_seed(size = nseed)
-allocate (seeds(nseed))
+allocate (seeds(nseed), rseeds(nseed))
 if (seed_type == 2) then
-  clock = 1111
+  clock = primes(1)
 else
   call system_clock(count = clock)
 end if
+seeds(:) = clock
 if (present(mype)) then
-  seeds = clock + 991 * mype + 997 * (/ (iseed - 1, iseed = 1, nseed) /)
-else
-  seeds = clock + 997 * (/ (iseed - 1, iseed = 1, nseed) /)
+  seeds(:) = seeds(:) + primes(mod(clock + mype, nprime)) * mype
 end if
+do iseed = 1, nseed
+  seeds(iseed) = seeds(iseed) + primes(mod(clock + iseed, nprime)) * iseed
+end do
 call random_seed(put = seeds)
-deallocate (seeds)
+
+! use random numbers to make seeds more random
+call random_number(rseeds)
+seeds(:) = rseeds(:) * huge(0)
+call random_seed(put = seeds)
+
+deallocate (seeds, rseeds)
 
 end subroutine gaussian_init
 
