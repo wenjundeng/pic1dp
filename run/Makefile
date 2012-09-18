@@ -36,8 +36,10 @@ endif
 .PHONY : run clean
 
 run : pic1dp clean
-	echo "$(MPIEXEC) -n $(NPE_RUN) ./$< 2>&1 | tee -a $<.log" > $<.log
+	@date > $<.log
+	@echo "$(MPIEXEC) -n $(NPE_RUN) ./$< 2>&1 | tee -a $<.log" >> $<.log
 	$(MPIEXEC) -n $(NPE_RUN) ./$< 2>&1 | tee -a $<.log
+	@date >> $<.log
 
 pic1dp : ../build/pic1dp
 	cp ../build/pic1dp ./
