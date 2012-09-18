@@ -51,7 +51,7 @@ integer(kind = gik), intent(in) :: seed_type
 integer(kind = gik), intent(in), optional :: mype
 
 integer, parameter :: nprime = 100
-integer, dimension(nprime), parameter :: primes = (/ &
+integer, dimension(0 : nprime - 1), parameter :: primes = (/ &
   7001, 7013, 7019, 7027, 7039, 7043, 7057, 7069, 7079, 7103, &
   7109, 7121, 7127, 7129, 7151, 7159, 7177, 7187, 7193, 7207, &
   7211, 7213, 7219, 7229, 7237, 7243, 7247, 7253, 7283, 7297, &
@@ -78,10 +78,11 @@ else
 end if
 seeds(:) = clock
 if (present(mype)) then
-  seeds(:) = seeds(:) + primes(mod(clock + mype, nprime)) * mype
+  seeds(:) = seeds(:) + primes(mod(clock + mype, nprime)) * (mype + 1)
 end if
 do iseed = 1, nseed
-  seeds(iseed) = seeds(iseed) + primes(mod(clock + iseed, nprime)) * iseed
+  seeds(iseed) = seeds(iseed) &
+    + primes(mod(seeds(iseed) + iseed, nprime)) * iseed
 end do
 call random_seed(put = seeds)
 
