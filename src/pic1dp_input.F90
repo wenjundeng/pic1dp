@@ -116,16 +116,15 @@ PetscScalar, dimension(0 : input_init_nmode - 1), parameter :: &
 PetscInt, parameter :: input_deltaf = 1
 
 ! initial time step (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_dt = 0.05_kpr
+PetscReal, parameter :: input_dt = 0.1_kpr
 
 ! allocation for # of marker particles per species
 ! this is also the maximum allowed # of marker particles during simulation
-PetscInt, parameter :: input_nparticle_max = 6400000
+PetscInt, parameter :: input_nparticle_max = 3200000
 
 ! # of initial loaded particles for each species
 PetscInt, dimension(input_nspecies), parameter :: &
-!  input_species_nparticle_init = (/ 3200000, 3200000 /)
-  input_species_nparticle_init = (/ 0800000 /)
+  input_species_nparticle_init = (/ 3200000 /)
 
 ! marker distribution in velocity space:
 ! 1: same as physical distribution; 2: uniform
@@ -201,7 +200,7 @@ PetscInt, parameter :: input_iptclshape = 4
 ! random seed type
 ! 1: random seeds (using system_clock)
 ! 2: constant seeds
-PetscInt, parameter :: input_seed_type = 2
+PetscInt, parameter :: input_seed_type = 1
 
 
 !!!!!!!!!!!!!!!!!!!!!
@@ -217,7 +216,7 @@ PetscInt, parameter :: input_seed_type = 2
 PetscInt, parameter :: input_verbosity = 1
 
 ! time interval between data output (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_output_interval = 0.25_kpr
+PetscReal, parameter :: input_output_interval = 0.5_kpr
 
 contains
 

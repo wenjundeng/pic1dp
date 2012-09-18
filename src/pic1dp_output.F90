@@ -204,7 +204,7 @@ PetscScalar, parameter :: delx_inv = input_nx / input_lx
 
 PetscInt :: ispecies, ip, ix, iv
 PetscScalar :: sx, sv
-PetscScalar, dimension(:), pointer :: px, pv, pp, pw, ps
+PetscScalar, dimension(:), pointer :: px, pv, pp, pw
 PetscScalar, dimension(0 : input_nx * input_nv - 1) :: &
   ptcldist_markr_xv, ptcldist_total_xv, ptcldist_pertb_xv, &
   ptcldist_markr_xv_redu, ptcldist_total_xv_redu, ptcldist_pertb_xv_redu
@@ -229,16 +229,12 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
   call VecGetArrayF90(particle_p(ispecies), pp, global_ierr)
   CHKERRQ(global_ierr)
-  call VecGetArrayF90(particle_s(ispecies), ps, global_ierr)
-  CHKERRQ(global_ierr)
   if (input_deltaf == 1) then
     call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
     CHKERRQ(global_ierr)
   end if
 
-  do ip = 1, particle_ip_high - particle_ip_low
-    ! ignore invalid particle
-    if (ps(ip) < -0.5_kpr) cycle
+  do ip = 1, particle_np(ispecies)
     ! if particle speed is out of v_max, ignore this particle
     if (abs(pv(ip)) >= input_v_max) cycle
 
@@ -314,14 +310,12 @@ do ispecies = 1, input_nspecies
       ptcldist_pertb_v(iv + 1) = ptcldist_pertb_v(iv + 1) &
         + (1.0_kpr - sv) * pw(ip)
     end if
-  end do ! ip = 1, particle_ip_high - particle_ip_low
+  end do ! ip = 1, particle_np(ispecies)
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
   call VecRestoreArrayF90(particle_v(ispecies), pv, global_ierr)
   CHKERRQ(global_ierr)
   call VecRestoreArrayF90(particle_p(ispecies), pp, global_ierr)
-  CHKERRQ(global_ierr)
-  call VecRestoreArrayF90(particle_s(ispecies), ps, global_ierr)
   CHKERRQ(global_ierr)
   if (input_deltaf == 1) then
     call VecRestoreArrayF90(particle_w(ispecies), pw, global_ierr)
@@ -489,6 +483,16 @@ PetscReal, dimension(2) :: progress ! 1: itime, 2: time
 PetscInt :: iprogress
 character :: cprogress
 
+PetscInt :: nparticle_allspec, nparticle_allspec_redu
+
+if (input_verbosity == 0) return
+
+if (progress_type == 1) then
+  nparticle_allspec = sum(particle_np(:))
+  call MPI_Reduce(nparticle_allspec, nparticle_allspec_redu, 1, &
+    MPIU_INTEGER, MPI_SUM, 0, MPI_COMM_WORLD, global_ierr)
+end if
+
 if (input_verbosity == 1) then
   progress(1) = 1e2_kpr * real(global_itime, kpr) / input_ntime_max
   progress(2) = 1e2_kpr * global_time / input_time_max
@@ -499,29 +503,28 @@ if (input_verbosity == 1) then
     cprogress = 't'
   end if
   if (progress_type == 1) then
-    write (global_msg, '(a, f5.1, a, i7, f9.3, a, i9, a, i9, a)') &
-      cprogress, progress(iprogress), "%%", global_itime, &
+    write (global_msg, '(a, f5.1, a, i7, f9.3, a, i9, a)') &
+      cprogress, progress(iprogress), "%%", global_itime + 1, &
       global_time + input_dt, &
-      ' : merge/throw away/split increased ', sum(particle_ninc), '; current: ', &
-      sum(input_species_nparticle_init) + sum(particle_ninc), "\n"
+      ' : merge/throw away/split performed, current # of particles ', &
+      nparticle_allspec_redu, "\n"
   else ! regular progress type
     write (global_msg, '(a, f5.1, a, i7, f9.3, es12.3e3, a)') &
       cprogress, progress(iprogress), "%%", global_itime, global_time, &
       electric_energe, "\n"
   end if ! else of if (progress_type == 1)
   call global_pp(global_msg)
-elseif (input_verbosity >= 2) then
+else ! implying input_verbosity >= 2
   if (progress_type == 1) then
-    write (global_msg, '(a, i9, a, i9, a)') &
-      'Info: particle_merge/throwaway/split increased # of particles:', &
-      sum(particle_ninc), '; current # of particles:', &
-      sum(input_species_nparticle_init) + sum(particle_ninc), "\n"
+    write (global_msg, '(2a, i9, a)') &
+      'Info: particle_merge/throwaway/split performed, ', &
+      'current # of particles:', nparticle_allspec_redu, "\n"
   else ! regular progress type
     write (global_msg, '(a, i7, a, f9.3, a)') 'Info: finished itime = ', &
       global_itime, ', time = ', global_time, "\n"
   end if ! else of if (progress_type == 1)
   call global_pp(global_msg)
-end if
+end if ! else of if (input_versobity == 1)
 
 end subroutine output_progress
 
