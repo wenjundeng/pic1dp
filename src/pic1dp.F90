@@ -151,7 +151,7 @@ do while (itermination == 0)
     call interaction_push_particle(irk)
     call wtimer_stop(iwt_push_particle)
 
-    ! merge non-resonant particles
+    ! merge not important particles
     if (input_deltaf == 1 &
       .and. imerge > 0 .and. imerge <= input_nmerge) then
       if ( &
@@ -159,13 +159,10 @@ do while (itermination == 0)
         .and. irk == 2 &
       ) then
         call wtimer_start(iwt_particle_mergesplit)
-        ! detect and mark resonant particles
-        call particle_detect_resonant( &
-          0.3_kpr, &
-          0.1_kpr / max(input_nmerge, 1) * real(imerge, kpr) &
-        )
+        ! calculate absolute value of perturbed distribution in v
+        call particle_compute_dist_pertb_abs_v
         ! perform merging
-        call particle_merge
+        call particle_merge(input_thshmerge(imerge))
         call wtimer_stop(iwt_particle_mergesplit)
         ! print out information
         call wtimer_start(iwt_output)
@@ -175,7 +172,7 @@ do while (itermination == 0)
       end if
     end if
 
-    ! throw away some non-resonant particles
+    ! throw away some not important particles
     if (input_deltaf == 1 &
       .and. ithrowaway > 0 .and. ithrowaway <= input_nthrowaway) then
       if ( &
@@ -183,11 +180,8 @@ do while (itermination == 0)
         .and. irk == 2 &
       ) then
         call wtimer_start(iwt_particle_mergesplit)
-        ! detect and mark resonant particles
-        call particle_detect_resonant( &
-          0.3_kpr, &
-          0.1_kpr / max(input_nthrowaway, 1) * real(ithrowaway, kpr) &
-        )
+        ! calculate absolute value of perturbed distribution in v
+        call particle_compute_dist_pertb_abs_v
         ! perform throwing away
         call particle_throwaway
         call wtimer_stop(iwt_particle_mergesplit)
@@ -199,7 +193,7 @@ do while (itermination == 0)
       end if
     end if
 
-    ! split resonant particles
+    ! split important particles
     if (input_deltaf == 1 &
       .and. isplit > 0 .and. isplit <= input_nsplit) then
       if ( &
@@ -207,15 +201,10 @@ do while (itermination == 0)
         .and. irk == 2 &
       ) then
         call wtimer_start(iwt_particle_mergesplit)
-        ! detect and mark resonant particles
-        call particle_detect_resonant( &
-          1.0_kpr - 0.8_kpr / max(input_nsplit, 1) &
-            * real(isplit, kpr), &
-          !0.3_kpr, &
-          0.1_kpr &
-        )
+        ! calculate absolute value of perturbed distribution in v
+        call particle_compute_dist_pertb_abs_v
         ! perform splitting
-        call particle_split
+        call particle_split(input_thshsplit(isplit))
         call wtimer_stop(iwt_particle_mergesplit)
         ! print out information
         call wtimer_start(iwt_output)
@@ -302,14 +291,15 @@ if (input_verbosity >= 1) then
     // string_wt(iwt_field_electric) // string_wt(iwt_output) // "\n")
 
   call global_pp( &
-    " ptcl split/merge     finalization    MPI_Allreduce          scatter\n")
+    "ptcl mrg/thr/splt     finalization                .                .\n")
   call wtimer_print(iwt_particle_mergesplit, &
     string_wt(iwt_particle_mergesplit), iwt_total, .true.)
   call wtimer_print(iwt_final, string_wt(iwt_final), iwt_total, .true.)
-  call wtimer_print(21, string_wt(21), iwt_total, .true.)
-  call wtimer_print(22, string_wt(22), iwt_total, .true.)
+  !call wtimer_print(21, string_wt(21), iwt_total, .true.)
+  !call wtimer_print(22, string_wt(22), iwt_total, .true.)
   call global_pp(string_wt(iwt_particle_mergesplit) // string_wt(iwt_final) &
-    // string_wt(21) // string_wt(22) // "\n")
+    !// string_wt(21) // string_wt(22) &
+    // "\n")
 end if
 
 call PetscFinalize(global_ierr)

@@ -50,6 +50,10 @@ PetscReal, dimension(:, :), allocatable :: particle_shape_x_values
 ! local index range of particle
 PetscInt :: particle_ip_low, particle_ip_high
 
+! absolute value of perturbed particle distribution in v
+PetscScalar, dimension(input_nspecies, 0 : input_nv - 1) :: &
+  particle_dist_pertb_abs_v
+
 ! invalid particle stack
 PetscInt, dimension(:, :), allocatable :: particle_invalid
 PetscInt :: particle_ninvalid(input_nspecies)
@@ -357,30 +361,25 @@ end do
 end subroutine particle_compute_shape_x
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! detect resonant particles and set resonant status !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine particle_detect_resonant(df_thsh_res_frac, df_thsh_nonres_frac)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! compute absolute value of perturbed distribution in v !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine particle_compute_dist_pertb_abs_v
 use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
 
-! delta f threshold (fraction of max(abs(delta f))) for resonant and
-! non-resonant particle
-PetscReal, intent(in) :: df_thsh_res_frac, df_thsh_nonres_frac
-
-PetscScalar, dimension(0 : input_nv - 1) :: &
-  ptcldist_pertb_v, ptcldist_pertb_v_redu
-
 PetscScalar, dimension(:), pointer :: pv, pw, ps
 
+PetscScalar, dimension(0 : input_nv - 1) :: dist_pertb_abs_v
+
 PetscInt :: ispecies, ip, iv
-PetscScalar :: sv, df, df_thsh_res, df_thsh_nonres
+PetscScalar :: sv, df
 
 do ispecies = 1, input_nspecies
-  ! first step, collect particles to v grids
+  ! collect particles to v grids
   ! (v is equilibrium constant of motion)
-  ptcldist_pertb_v(:) = 0.0_kpr
+  dist_pertb_abs_v(:) = 0.0_kpr
 
   call VecGetArrayF90(particle_v(ispecies), pv, global_ierr)
   CHKERRQ(global_ierr)
@@ -400,45 +399,15 @@ do ispecies = 1, input_nspecies
     iv = floor(sv)
     sv = 1.0_kpr - (sv - real(iv, kpr))
 
-    ! note that abs() is applied to w, otherwise positive and negative
-    ! resonant regions may get canceled out
-    ptcldist_pertb_v(iv) = ptcldist_pertb_v(iv) + sv * abs(pw(ip))
-    ptcldist_pertb_v(iv + 1) = ptcldist_pertb_v(iv + 1) &
+    dist_pertb_abs_v(iv) = dist_pertb_abs_v(iv) + sv * abs(pw(ip))
+    dist_pertb_abs_v(iv + 1) = dist_pertb_abs_v(iv + 1) &
       + (1.0_kpr - sv) * abs(pw(ip))
   end do ! ip = 1, particle_ip_high - particle_ip_low
 
-  call MPI_Allreduce(ptcldist_pertb_v, ptcldist_pertb_v_redu, &
+  call MPI_Allreduce(dist_pertb_abs_v(:), &
+    particle_dist_pertb_abs_v(ispecies, :), &
     input_nv, MPIU_SCALAR, MPI_SUM, MPI_COMM_WORLD, global_ierr)
   CHKERRQ(global_ierr)
-
-  df = maxval(ptcldist_pertb_v_redu)
-  df_thsh_res = df * df_thsh_res_frac
-  df_thsh_nonres = df * df_thsh_nonres_frac
-
-  ! second step, mark resonant particles
-  do ip = 1, particle_ip_high - particle_ip_low
-    ! ignore invalid particle
-    if (ps(ip) < -0.5_kpr) cycle
-    ! ignore too fast particle
-    if (abs(pv(ip)) >= input_v_max) cycle
-
-    sv = (pv(ip) + input_v_max) &
-      / (input_v_max * 2.0_kpr) * (input_nv - 1)
-    iv = floor(sv)
-    sv = 1.0_kpr - (sv - real(iv, kpr))
-
-    df = ptcldist_pertb_v_redu(iv) * sv &
-      + ptcldist_pertb_v_redu(iv + 1) * (1.0_kpr - sv)
-
-    if (df > df_thsh_res) then
-      ps(ip) = 1.0_kpr ! resonant
-    elseif (df < df_thsh_nonres) then
-      ps(ip) = 2.0_kpr ! non-resonant
-    else
-      ps(ip) = 0.0_kpr ! regular
-    end if
-    !if (pv(ip) < 1.5) ps(ip) = 2.0_kpr
-  end do ! ip = 1, particle_ip_high - particle_ip_low
 
   call VecRestoreArrayF90(particle_v(ispecies), pv, global_ierr)
   CHKERRQ(global_ierr)
@@ -446,38 +415,41 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
   call VecRestoreArrayF90(particle_s(ispecies), ps, global_ierr)
   CHKERRQ(global_ierr)
-
 end do ! ispecies = 1, input_nspecies
 
-end subroutine particle_detect_resonant
+end subroutine particle_compute_dist_pertb_abs_v
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! merge non-resonant particles                             !
-! using resonant status marked by particle_detect_resonant !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine particle_merge
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! merge not important particles               !
+! using particle_dist_pertb_abs_v computed by !
+! particle_compute_dist_pertb_abs_v           !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine particle_merge(thsh_frac_dist_pertb_abs_v)
 use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
 
+! merging threshold in terms of fraction of absolute value of
+! distribtuion in v
+PetscReal, intent(in) :: thsh_frac_dist_pertb_abs_v
+
 PetscInt, dimension(:, :, :), allocatable :: ipbin_top
 PetscInt, dimension(:, :, :, :), allocatable :: ipbin
-PetscInt :: ispecies, ip, ip1, ix, iv, iw, nx, nv
+PetscInt :: ispecies, ip, ip1, ix, iv, iw
 PetscInt :: ninc1, ninc2
 
 PetscScalar, dimension(:), pointer :: px, pv, pp, pw, ps
-PetscScalar :: sx, sv
+PetscScalar :: sx, sv, df, df_thsh
 
-nx = input_nx
-nv = input_nv
-
-allocate (ipbin(0 : nx - 1, 0 : nv - 1, 2, 1))
-allocate (ipbin_top(0 : nx - 1, 0 : nv - 1, 2))
+allocate (ipbin(0 : input_nx - 1, 0 : input_nv - 1, 2, 1))
+allocate (ipbin_top(0 : input_nx - 1, 0 : input_nv - 1, 2))
 
 do ispecies = 1, input_nspecies
   ipbin_top(:, :, :) = 1
   ninc1 = 0
+  df_thsh = maxval(particle_dist_pertb_abs_v(ispecies, :)) &
+    * thsh_frac_dist_pertb_abs_v
 
   call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
@@ -491,21 +463,36 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
 
   do ip = 1, particle_ip_high - particle_ip_low
-    ! ignore not non-resonant particle
-    if (ps(ip) < 1.5_kpr) cycle
+    ! ignore invalid particle
+    if (ps(ip) < -0.5_kpr) cycle
     ! ignore too fast particle
     !if (abs(pv(ip)) >= input_v_max) cycle
+
+    sv = (pv(ip) + input_v_max) / (input_v_max * 2.0_kpr) * (input_nv - 1)
+    iv = floor(sv)
+    if (iv < 0) then
+      iv = 0
+      sv = 1.0_kpr
+      df = particle_dist_pertb_abs_v(ispecies, iv)
+    elseif (iv > input_nv - 1) then
+      iv = input_nv - 1
+      sv = 1.0_kpr
+      df = particle_dist_pertb_abs_v(ispecies, iv)
+    else
+      sv = 1.0_kpr - (sv - real(iv, kpr))
+      df = particle_dist_pertb_abs_v(ispecies, iv) * sv &
+        + particle_dist_pertb_abs_v(ispecies, iv + 1) * (1.0_kpr - sv)
+    end if ! else of if (iv < 0) elseif (iv > input_nv - 1)
+    ! ignore important particle
+    if (df >= df_thsh) cycle
 
     ! enforce periodic boundary condition
     px(ip) = mod(px(ip), input_lx)
     ! if x is negative, mod gives negative result, so shift it to positive
     if (px(ip) < 0.0_kpr) px(ip) = px(ip) + input_lx
 
-    sx = px(ip) / input_lx * nx
+    sx = px(ip) / input_lx * input_nx
     ix = floor(sx)
-    sv = (pv(ip) + input_v_max) / (input_v_max * 2.0_kpr) * (nv - 1)
-    iv = floor(sv)
-
     if (pw(ip) > 0.0_kpr) then
       iw = 2
     else
@@ -563,19 +550,21 @@ deallocate (ipbin, ipbin_top)
 end subroutine particle_merge
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! throw away some non-resonant particles                   !
-! using resonant status marked by particle_detect_resonant !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! throw away some not important particles     !
+! using particle_dist_pertb_abs_v computed by !
+! particle_compute_dist_pertb_abs_v           !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine particle_throwaway
 use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
 
-PetscInt :: ispecies, ip
+PetscInt :: ispecies, ip, iv
 PetscInt :: ninc1, ninc2
 
 PetscScalar, dimension(:), pointer :: px, pv, pp, pw, ps
+PetscScalar :: sv, df
 PetscReal :: dice
 
 do ispecies = 1, input_nspecies
@@ -593,19 +582,31 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
 
   do ip = 1, particle_ip_high - particle_ip_low
-    ! ignore not non-resonant particle
-    if (ps(ip) < 1.5_kpr) cycle
+    ! ignore invalid particle
+    if (ps(ip) < -0.5_kpr) cycle
     ! ignore too fast particle
     !if (abs(pv(ip)) >= input_v_max) cycle
 
-    ! enforce periodic boundary condition
-    px(ip) = mod(px(ip), input_lx)
-    ! if x is negative, mod gives negative result, so shift it to positive
-    if (px(ip) < 0.0_kpr) px(ip) = px(ip) + input_lx
+    sv = (pv(ip) + input_v_max) / (input_v_max * 2.0_kpr) * (input_nv - 1)
+    iv = floor(sv)
+    if (iv < 0) then
+      iv = 0
+      sv = 1.0_kpr
+      df = particle_dist_pertb_abs_v(ispecies, iv)
+    elseif (iv > input_nv - 1) then
+      iv = input_nv - 1
+      sv = 1.0_kpr
+      df = particle_dist_pertb_abs_v(ispecies, iv)
+    else
+      sv = 1.0_kpr - (sv - real(iv, kpr))
+      df = particle_dist_pertb_abs_v(ispecies, iv) * sv &
+        + particle_dist_pertb_abs_v(ispecies, iv + 1) * (1.0_kpr - sv)
+    end if ! else of if (iv < 0) elseif (iv > input_nv - 1)
+    df = df / maxval(particle_dist_pertb_abs_v(ispecies, :))
 
     call random_number(dice)
 
-    if (dice < input_throwaway_frac) then
+    if (dice > df) then
       ! throw away particle
       px(ip) = 0.0_kpr
       pv(ip) = 0.0_kpr
@@ -618,8 +619,10 @@ do ispecies = 1, input_nspecies
       ninc1 = ninc1 - 1
     else
       ! keep particle, but scale up weight
-      pp(ip) = pp(ip) * (1.0_kpr / (1.0_kpr - input_throwaway_frac))
-      pw(ip) = pw(ip) * (1.0_kpr / (1.0_kpr - input_throwaway_frac))
+      !pp(ip) = pp(ip) / (1.0_kpr - input_throwaway_frac)
+      !pw(ip) = pw(ip) / (1.0_kpr - input_throwaway_frac)
+      pp(ip) = pp(ip) / df
+      pw(ip) = pw(ip) / df
     end if ! else of if (dice < input_throwaway_frac)
   end do ! ip = 1, particle_ip_high - particle_ip_low
 
@@ -644,20 +647,27 @@ end do ! ispecies = 1, input_nspecies
 end subroutine particle_throwaway
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! split resonant particles                                 !
-! using resonant status marked by particle_detect_resonant !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine particle_split
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! split resonant particles                    !
+! using particle_dist_pertb_abs_v computed by !
+! particle_compute_dist_pertb_abs_v           !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine particle_split(thsh_frac_dist_pertb_abs_v)
 use pic1dp_global
 use gaussian
 implicit none
 #include "finclude/petsc.h90"
 
-PetscInt :: ispecies, ip, ip1, igroup
+! splitting threshold in terms of fraction of absolute value of
+! distribtuion in v
+PetscReal, intent(in) :: thsh_frac_dist_pertb_abs_v
+
+PetscInt :: ispecies, ip, ip1, iv, igroup
 PetscInt :: ninc1, ninc2
 PetscScalar, dimension(:), pointer :: px, pv, pp, pw, ps
 PetscReal, dimension(input_split_ngroup) :: grand
+PetscScalar :: sv
+PetscScalar :: df, df_thsh
 !PetscBool :: bout
 
 !bout = PETSC_TRUE
@@ -667,6 +677,8 @@ do ispecies = 1, input_nspecies
   if (particle_ninvalid(ispecies) < 2 * input_split_ngroup - 1) cycle
 
   ninc1 = 0
+  df_thsh = maxval(particle_dist_pertb_abs_v(ispecies, :)) &
+    * thsh_frac_dist_pertb_abs_v
 
   call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
@@ -682,10 +694,29 @@ do ispecies = 1, input_nspecies
   do ip = 1, particle_ip_high - particle_ip_low
     ! if particle array for this species is full, no more splitting can be done
     if (particle_ninvalid(ispecies) < 2 * input_split_ngroup - 1) exit
-    ! ignore not resonant particle
-    if (ps(ip) < 0.5_kpr .or. ps(ip) > 1.5_kpr) cycle
+    ! ignore invalid particle
+    if (ps(ip) < -0.5_kpr) cycle
     ! ignore too fast particle
     !if (abs(pv(ip)) >= input_v_max) cycle
+
+    sv = (pv(ip) + input_v_max) / (input_v_max * 2.0_kpr) * (input_nv - 1)
+    iv = floor(sv)
+    if (iv < 0) then
+      iv = 0
+      sv = 1.0_kpr
+      df = particle_dist_pertb_abs_v(ispecies, iv)
+    elseif (iv > input_nv - 1) then
+      iv = input_nv - 1
+      sv = 1.0_kpr
+      df = particle_dist_pertb_abs_v(ispecies, iv)
+    else
+      sv = 1.0_kpr - (sv - real(iv, kpr))
+      df = particle_dist_pertb_abs_v(ispecies, iv) * sv &
+        + particle_dist_pertb_abs_v(ispecies, iv + 1) * (1.0_kpr - sv)
+    end if ! else of if (iv < 0) elseif (iv > nv - 1)
+    ! ignore important particle
+    if (df <= df_thsh) cycle
+
     call gaussian_generate(grand)
     !grand(:) = grand(:) * input_lx / input_nx * dx_sig_frac
     grand(:) = grand(:) * 2.0_kpr * input_v_max / input_nv &

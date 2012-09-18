@@ -150,9 +150,16 @@ PetscReal, dimension(input_nmerge), parameter :: &
   input_tmerge = (/ (50.0_kpr + global_itime * 0.5_kpr, &
     global_itime = 1, input_nmerge) /)
 
+! list of merging thresholds in terms of
+! fraction of absolute value of distribution in v
+PetscReal, dimension(input_nmerge), parameter :: &
+  input_thshmerge = (/ &
+    (0.05_kpr / max(input_nmerge, 1) * real(global_itime, kpr), &
+    global_itime = 1, input_nmerge) /)
+
 ! # of times of throwing away particles
 ! (set to 0 to disable throwing away)
-PetscInt, parameter :: input_nthrowaway = 1
+PetscInt, parameter :: input_nthrowaway = 0
 
 ! list of times to throw away particles, must be in ascending order
 PetscReal, dimension(input_nthrowaway), parameter :: &
@@ -169,6 +176,13 @@ PetscInt, parameter :: input_nsplit = 0
 ! list of times to split particles, must be in ascending order
 PetscReal, dimension(input_nsplit), parameter :: &
   input_tsplit = (/ (50.0_kpr + global_itime * 0.5_kpr, &
+    global_itime = 1, input_nsplit) /)
+
+! list of splitting thresholds in terms of
+! fraction of absolute value of distribution in v
+PetscReal, dimension(input_nsplit), parameter :: &
+  input_thshsplit = (/ &
+    (1.0_kpr - 0.9_kpr / max(input_nsplit, 1) * real(global_itime, kpr), &
     global_itime = 1, input_nsplit) /)
 
 ! # of groups for splitting particles
