@@ -47,7 +47,7 @@ run : build/pic1dp
 	$(MAKE) -C ./run run
 
 visual :
-	./visual/visual.py ./run
+	./tools/visual.py ./run
 
 doc :
 	$(MAKE) -C ./doc
