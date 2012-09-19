@@ -100,13 +100,15 @@ else
 end if
 seeds(:) = clock
 if (present(mype)) then
-  seeds(:) = seeds(:) + primes1(mod(clock + mype, nprime)) * mype
+  seeds(:) = seeds(:) + primes1( &
+    mod(clock + primes2(mod(clock, nprime)) * mype, nprime) &
+  ) * mype
 end if
 do iseed = 1, nseed
-  seeds(iseed) = seeds(iseed) &
-    + primes2(mod(seeds(iseed) + iseed, nprime)) * iseed
+  seeds(iseed) = seeds(iseed) + primes2( &
+    mod(seeds(iseed) + primes1(mod(clock, nprime)) * iseed, nprime) &
+  ) * iseed
 end do
-write (*, *) mype, seeds
 call random_seed(put = seeds)
 
 ! use random numbers to make seeds more random
