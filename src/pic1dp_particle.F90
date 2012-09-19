@@ -408,8 +408,9 @@ do ispecies = 1, input_nspecies
   call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
   CHKERRQ(global_ierr)
 
-  ip = 1
+  ip = 0
   do
+    ip = ip + 1
     if (ip > particle_np(ispecies)) exit
 
     ! ignore too fast particle
@@ -471,7 +472,6 @@ do ispecies = 1, input_nspecies
       ! reset bin
       ipbin_top(ix, iv, iw) = 1
     end if
-    ip = ip + 1
   end do ! ip = 1, particle_np(ispecies)
 
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
@@ -515,8 +515,9 @@ do ispecies = 1, input_nspecies
   call VecGetArrayF90(particle_w(ispecies), pw, global_ierr)
   CHKERRQ(global_ierr)
 
-  ip = 1
+  ip = 0
   do
+    ip = ip + 1
     if (ip > particle_np(ispecies)) exit
 
     ! ignore too fast particle
@@ -558,7 +559,6 @@ do ispecies = 1, input_nspecies
       pp(ip) = pp(ip) / df
       pw(ip) = pw(ip) / df
     end if ! else of if (dice > df)
-    ip = ip + 1
   end do ! ip = 1, particle_np(ispecies)
 
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
