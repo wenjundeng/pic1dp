@@ -95,31 +95,31 @@ end subroutine output_init
 !!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! output field quantities !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine output_field(electric_energe)
+subroutine output_field(electric_energy)
 use pic1dp_global
 use pic1dp_field
 use pic1dp_particle
 implicit none
 #include "finclude/petsc.h90"
 
-PetscReal, intent(out) :: electric_energe
+PetscReal, intent(out) :: electric_energy
 
 ! # of scalars for output
-! electric energe + marker, total and perturbed kinetic energe for each species
+! electric energy + marker, total and perturbed kinetic energy for each species
 PetscInt, parameter :: nscalar = 2 + input_nspecies * 3
 
 PetscInt :: ispecies
-PetscReal :: energe
+PetscReal :: energy
 PetscReal, dimension(nscalar) :: realbuf
 
 realbuf(1) = global_time
 
-! output E^2 (electric energe) and particle kinetic energe
-call VecNorm(field_electric, NORM_2, energe, global_ierr)
+! output E^2 (electric energy) and particle kinetic energy
+call VecNorm(field_electric, NORM_2, energy, global_ierr)
 CHKERRQ(global_ierr)
-energe = energe * energe * input_lx / input_nx
-realbuf(2) = energe
-electric_energe = energe
+energy = energy * energy * input_lx / input_nx
+realbuf(2) = energy
+electric_energy = energy
 
 do ispecies = 1, input_nspecies
   ! put v*v in particle_tmp1
@@ -127,46 +127,46 @@ do ispecies = 1, input_nspecies
     particle_v(ispecies), particle_v(ispecies), global_ierr)
   CHKERRQ(global_ierr)
 
-  ! calculate sum(v*v) to get marker energe
-  call VecSum(particle_tmp1, energe, global_ierr)
+  ! calculate sum(v*v) to get marker energy
+  call VecSum(particle_tmp1, energy, global_ierr)
   CHKERRQ(global_ierr)
-  realbuf(ispecies * 3) = energe
+  realbuf(ispecies * 3) = energy
 
-  ! calculate sum(v*v*p) to get total energe
+  ! calculate sum(v*v*p) to get total energy
   call VecPointwiseMult(particle_tmp2, &
     particle_tmp1, particle_p(ispecies), global_ierr)
   CHKERRQ(global_ierr)
-  call VecSum(particle_tmp2, energe, global_ierr)
+  call VecSum(particle_tmp2, energy, global_ierr)
   CHKERRQ(global_ierr)
-  realbuf(ispecies * 3 + 1) = energe
+  realbuf(ispecies * 3 + 1) = energy
 
-  ! calculate sum(v*v*w) to get perturbed energe
+  ! calculate sum(v*v*w) to get perturbed energy
   if (input_deltaf == 1) then
     call VecPointwiseMult(particle_tmp2, &
       particle_tmp1, particle_w(ispecies), global_ierr)
     CHKERRQ(global_ierr)
-    call VecSum(particle_tmp2, energe, global_ierr)
+    call VecSum(particle_tmp2, energy, global_ierr)
     CHKERRQ(global_ierr)
     if (input_linear == 1) then
-      ! linear case, add perturbed energe to get total energe
-      realbuf(ispecies * 3 + 1) = realbuf(ispecies * 3 + 1) + energe
+      ! linear case, add perturbed energy to get total energy
+      realbuf(ispecies * 3 + 1) = realbuf(ispecies * 3 + 1) + energy
     end if
   else
-    ! at this point energe is total energe
-    ! subtract equilibrium energe to get perturbed energe
+    ! at this point energy is total energy
+    ! subtract equilibrium energy to get perturbed energy
     if (input_iptcldist == 1) then ! two-stream1
-      energe = energe - 3.0_kpr * input_species_density(ispecies) * input_lx
+      energy = energy - 3.0_kpr * input_species_density(ispecies) * input_lx
     elseif (input_iptcldist == 2) then ! two-stream2
-      ! need to calculate equilibrium energe for this case
+      ! need to calculate equilibrium energy for this case
     elseif (input_iptcldist == 3) then ! bump-on-tail
-      ! need to calculate equilibrium energe for this case
+      ! need to calculate equilibrium energy for this case
     else ! (shifted) Maxwellian
-      energe = energe - input_species_temperature(ispecies) &
+      energy = energy - input_species_temperature(ispecies) &
         / input_species_mass(ispecies) * input_species_density(ispecies) &
         * input_lx
     end if
   end if
-  realbuf(ispecies * 3 + 2) = energe
+  realbuf(ispecies * 3 + 2) = energy
 end do
 call PetscViewerBinaryWriteReal(output_viewer, realbuf, nscalar, &
   PETSC_TRUE, global_ierr)
@@ -466,7 +466,7 @@ end subroutine output_ptcldist
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! output progress information to stdout !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine output_progress(progress_type, electric_energe)
+subroutine output_progress(progress_type, electric_energy)
 use pic1dp_global
 use pic1dp_input
 use pic1dp_particle
@@ -476,8 +476,8 @@ implicit none
 ! progress type. 0: regular; 1: merge/throw away/split particle output
 PetscInt, intent(in) :: progress_type
 
-! electric energe, has to be provided if progress_type = 0
-PetscReal, intent(in), optional :: electric_energe
+! electric energy, has to be provided if progress_type = 0
+PetscReal, intent(in), optional :: electric_energy
 
 PetscReal, dimension(2) :: progress ! 1: itime, 2: time
 PetscInt :: iprogress
@@ -511,7 +511,7 @@ if (input_verbosity == 1) then
   else ! regular progress type
     write (global_msg, '(a, f5.1, a, i7, f9.3, es12.3e3, a)') &
       cprogress, progress(iprogress), "%%", global_itime, global_time, &
-      electric_energe, "\n"
+      electric_energy, "\n"
   end if ! else of if (progress_type == 1)
   call global_pp(global_msg)
 else ! implying input_verbosity >= 2
@@ -537,11 +537,11 @@ use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
 
-PetscReal :: electric_energe
+PetscReal :: electric_energy
 
-call output_field(electric_energe)
+call output_field(electric_energy)
 call output_ptcldist
-call output_progress(0, electric_energe)
+call output_progress(0, electric_energy)
 
 end subroutine output_all
 
