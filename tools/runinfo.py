@@ -29,18 +29,21 @@ def printvalref(desc, value, value_ref):
 
 parser = argparse.ArgumentParser( \
     description = 'Get various information from run(s)')
-parser.add_argument('-gr', \
-    metavar = ('<lower bound>', '<upper bound>'), \
-    help = 'time boundaries for growth rate calculation', \
-    nargs = 2, type = float)
-parser.add_argument('-sr', \
-    metavar = ('<lower bound>', '<upper bound>'), \
-    help = 'time boundaries for saturation level calculation', \
-    nargs = 2, type = float)
 parser.add_argument('-g', \
     metavar = '<# of runs in group>', \
     help = 'get information from a group of runs', \
     nargs = '+', type = int)
+parser.add_argument('-gr', \
+    metavar = ('<lower bound>', '<upper bound>'), \
+    help = 'time boundaries for growth rate calculation', \
+    nargs = 2, type = float)
+parser.add_argument('-gref', metavar = '<reference growth rate>', \
+    help = 'specify reference growth rate instead of using value from' \
+    + ' first run and group', nargs = 1, type = float)
+parser.add_argument('-sr', \
+    metavar = ('<lower bound>', '<upper bound>'), \
+    help = 'time boundaries for saturation level calculation', \
+    nargs = 2, type = float)
 parser.add_argument('datapaths', metavar = 'data path', \
     help = 'data path for each run', \
     nargs = '*', type = str, default = ['./'])
@@ -90,7 +93,10 @@ for irun in range(len(args.datapaths)):
     if args.gr is not None:
         gamma = data[irun].growthrate_energe_fit(args.gr[0], args.gr[1]) / 2.0
         if irun == 0:
-            gamma_ref = gamma
+            if args.gref is not None:
+                gamma_ref = args.gref[0]
+            else:
+                gamma_ref = gamma
         printvalref('growth rate =', gamma, gamma_ref)
         if args.g is not None:
             gamma_group[irun_group] = gamma
@@ -121,12 +127,17 @@ for irun in range(len(args.datapaths)):
                 gamma_groupavg = np.mean(gamma_group)
                 gamma_groupstd = np.std(gamma_group)
                 if igroup == 0:
-                    gamma_groupavg_ref = gamma_groupavg
+                    if args.gref is not None:
+                        gamma_groupavg_ref = args.gref[0]
+                    else:
+                        gamma_groupavg_ref = gamma_groupavg
                     gamma_groupstd_ref = gamma_groupstd
                 printvalref('growth rate avaerage =', gamma_groupavg, \
                     gamma_groupavg_ref)
                 printvalref('growth rate std =', gamma_groupstd, \
                     gamma_groupstd_ref)
+                print 'growth rate std / average =', \
+                    gamma_groupstd / gamma_groupavg * 100.0, '%'
             if args.sr is not None:
                 peak_groupavg = np.mean(peak_group, axis = 0)
                 peak_groupstd = np.std(peak_group, axis = 0)
@@ -137,11 +148,16 @@ for irun in range(len(args.datapaths)):
                     peak_groupavg_ref[1])
                 printvalref('saturation level std =', peak_groupstd[1], \
                     peak_groupstd_ref[1])
+                print 'saturation level std / average =', \
+                    peak_groupstd[1] / peak_groupavg[1] * 100.0, '%'
                 printvalref('saturation time average =', peak_groupavg[0], \
                     peak_groupavg_ref[0])
                 printvalref('saturation time std =', peak_groupstd[0], \
                     peak_groupstd_ref[0])
+                print 'saturation time std / average =', \
+                    peak_groupstd[0] / peak_groupavg[0] * 100.0, '%'
 
+            print '****************************************'
             # move on to next group
             irun_group = 0
             igroup += 1
