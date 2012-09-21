@@ -183,7 +183,7 @@ do while (itermination == 0)
         ! calculate absolute value of perturbed distribution in v
         call particle_compute_dist_pertb_abs_v
         ! perform throwing away
-        call particle_throwaway
+        call particle_throwaway(input_thshthrowaway(ithrowaway))
         call wtimer_stop(iwt_particle_mergesplit)
         ! print out information
         call wtimer_start(iwt_output)

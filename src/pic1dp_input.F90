@@ -120,11 +120,11 @@ PetscReal, parameter :: input_dt = 0.1_kpr
 
 ! allocation for # of marker particles per species
 ! this is also the maximum allowed # of marker particles during simulation
-PetscInt, parameter :: input_nparticle_max = 3200000
+PetscInt, parameter :: input_nparticle_max = 6400000
 
 ! # of initial loaded particles for each species
 PetscInt, dimension(input_nspecies), parameter :: &
-  input_species_nparticle_init = (/ 3200000 /)
+  input_species_nparticle_init = (/ 6400000 /)
 
 ! marker distribution in velocity space:
 ! 1: same as physical distribution; 2: uniform
@@ -153,7 +153,7 @@ PetscReal, dimension(input_nmerge), parameter :: &
 ! fraction of absolute value of distribution in v
 PetscReal, dimension(input_nmerge), parameter :: &
   input_thshmerge = (/ &
-    (0.05_kpr / max(input_nmerge, 1) * real(global_itime, kpr), &
+    (0.1_kpr / max(input_nmerge, 1) * real(global_itime, kpr), &
     global_itime = 1, input_nmerge) /)
 
 ! # of times of throwing away particles
@@ -163,6 +163,13 @@ PetscInt, parameter :: input_nthrowaway = 0
 ! list of times to throw away particles, must be in ascending order
 PetscReal, dimension(input_nthrowaway), parameter :: &
   input_tthrowaway = (/ (50.0_kpr + global_itime * 0.5_kpr, &
+    global_itime = 1, input_nthrowaway) /)
+
+! list of throwing away thresholds in terms of
+! fraction of absolute value of distribution in v
+PetscReal, dimension(input_nthrowaway), parameter :: &
+  input_thshthrowaway = (/ &
+    (0.1_kpr / max(input_nthrowaway, 1) * real(global_itime, kpr), &
     global_itime = 1, input_nthrowaway) /)
 
 ! fraction of non-resonant particles to be thrown away
@@ -188,7 +195,7 @@ PetscReal, dimension(input_nsplit), parameter :: &
 PetscInt, parameter :: input_split_ngroup = 5
 
 ! variation of change in v in terms of fraction of grid size
-PetscReal, parameter :: input_split_dv_sig_frac = 1.0_kpr
+PetscReal, parameter :: input_split_dv_sig_frac = 0.1_kpr
 
 ! particle shape calculation
 ! 1: use PETSc matrix for shape matrix, destroy and re-create matrix every time

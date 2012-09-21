@@ -494,18 +494,25 @@ end subroutine particle_merge
 ! using particle_dist_pertb_abs_v computed by !
 ! particle_compute_dist_pertb_abs_v           !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine particle_throwaway
+subroutine particle_throwaway(thsh_frac_dist_pertb_abs_v)
 use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
 
+! throwing away threshold in terms of fraction of absolute value of
+! distribtuion in v
+PetscReal, intent(in) :: thsh_frac_dist_pertb_abs_v
+
 PetscInt :: ispecies, ip, iv
 
 PetscScalar, dimension(:), pointer :: px, pv, pp, pw
-PetscScalar :: sv, df
+PetscScalar :: sv, df, df_thsh
 PetscReal :: dice
 
 do ispecies = 1, input_nspecies
+  df_thsh = maxval(particle_dist_pertb_abs_v(ispecies, :)) &
+    * thsh_frac_dist_pertb_abs_v
+
   call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
   call VecGetArrayF90(particle_v(ispecies), pv, global_ierr)
@@ -538,11 +545,14 @@ do ispecies = 1, input_nspecies
       df = particle_dist_pertb_abs_v(ispecies, iv) * sv &
         + particle_dist_pertb_abs_v(ispecies, iv + 1) * (1.0_kpr - sv)
     end if ! else of if (iv < 0) elseif (iv > input_nv - 1)
-    df = df / maxval(particle_dist_pertb_abs_v(ispecies, :))
+    ! ignore important particle
+    if (df >= df_thsh) cycle
 
+    df = df / maxval(particle_dist_pertb_abs_v(ispecies, :))
     call random_number(dice)
 
-    if (dice > df) then
+    if (dice < input_throwaway_frac) then
+    !if (dice > df) then
       ! throw away particle, and move the last particle to current index
       if (ip < particle_np(ispecies)) then
         px(ip) = px(particle_np(ispecies))
@@ -554,10 +564,10 @@ do ispecies = 1, input_nspecies
       particle_np(ispecies) = particle_np(ispecies) - 1
     else
       ! keep particle, but scale up weight
-      !pp(ip) = pp(ip) / (1.0_kpr - input_throwaway_frac)
-      !pw(ip) = pw(ip) / (1.0_kpr - input_throwaway_frac)
-      pp(ip) = pp(ip) / df
-      pw(ip) = pw(ip) / df
+      pp(ip) = pp(ip) / (1.0_kpr - input_throwaway_frac)
+      pw(ip) = pw(ip) / (1.0_kpr - input_throwaway_frac)
+      !pp(ip) = pp(ip) / df
+      !pw(ip) = pw(ip) / df
     end if ! else of if (dice > df)
   end do ! ip = 1, particle_np(ispecies)
 
