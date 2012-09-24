@@ -194,7 +194,8 @@ class Dispersion:
             self.solveomega()
             omega = self._omega
         print 'k = ', k, ': omega =', omega,
-        print ' (gamma / omega_r =', omega.imag / omega.real * 100.0, '%)'
+        print ' (gamma / omega_r =', omega.imag / omega.real * 100.0, '%)',
+        print ' : v_res =', omega.real / k
 
 # end of class Dispersion
 
