@@ -5,6 +5,14 @@ import XPetscBinaryIO
 class OutputData:
     """class for handling PIC1D-PETSc output data"""
 
+    nspecies = 0
+    nmode = 0
+    nx = 0
+    nv = 0
+    lx = 0.0
+    v_max = 0.0
+    ntime = 0
+
     def __init__(self, datapath):
         #self._datapath = datapath
         io = XPetscBinaryIO.XPetscBinaryIO()

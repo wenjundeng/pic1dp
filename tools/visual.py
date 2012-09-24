@@ -9,67 +9,13 @@ import matplotlib.pyplot as plt
 import matplotlib.pylab as plb
 import matplotlib.widgets as widgets
 import OutputData
-
-class XScalarFormatter(mpl.ticker.ScalarFormatter):
-    """eXtended ScalarFormatter"""
-
-    def __init__(self, useOffset = True, useMathText = False, \
-        useLocale = None, precision = None):
-
-        mpl.ticker.ScalarFormatter.__init__(\
-            self, useOffset, useMathText, useLocale)
-        self._precision = precision
-
-    def set_precision(self, precision):
-        """use this function to set precision"""
-        self._precision = precision
-
-    def get_offset(self):
-        """Return scientific notation, plus offset"""
-        if len(self.locs)==0: return ''
-        s = ''
-        if self.orderOfMagnitude or self.offset:
-            offsetStr = ''
-            sciNotStr = ''
-            if self.offset:
-                offsetStr = self.format_data(self.offset)
-                if self.offset > 0: offsetStr = '+' + offsetStr
-            if self.orderOfMagnitude:
-                if self._usetex or self._useMathText:
-                    sciNotStr = self.format_data(10**self.orderOfMagnitude)
-                else:
-                    sciNotStr = '1e%d'% self.orderOfMagnitude
-            if self._usetex or self._useMathText:
-                if sciNotStr != '':
-                    sciNotStr = r'\times%s' % sciNotStr
-                s =  ''.join(('$',sciNotStr,offsetStr,'$'))
-            else:
-                s =  ''.join((sciNotStr,offsetStr))
-
-        return self.fix_minus(s)
-
-    def _set_format(self):
-        # set the format string to format all the ticklabels
-        # The floating point black magic (adding 1e-15 and formatting
-        # to 8 digits) may warrant review and cleanup.
-        locs = (np.asarray(self.locs)-self.offset) / 10**self.orderOfMagnitude+1e-15
-        sigfigs = [len(str('%1.8f'% loc).split('.')[1].rstrip('0')) \
-                   for loc in locs]
-        sigfigs.sort()
-        if self._precision is None:
-            self.format = '%1.' + str(sigfigs[-1]) + 'f'
-        else:
-            self.format = '%1.' + str(self._precision) + 'f'
-
-        if self._usetex or self._useMathText:
-            self.format = '$%s$' % self.format
-
+import XScalarFormatter
 
 class VisualApp:
-    """class of visualization app"""
+    """Class of visualization app"""
 
     def __init__(self, datapath):
-        """initialization"""
+        """Initialization"""
 
         # object that handles output data
         self._data = OutputData.OutputData(datapath)
@@ -84,7 +30,7 @@ class VisualApp:
         self._itime = 0 # time index
         self._itime1 = 0 # time range index 1
         self._itime2 = self._data.ntime # time range index 2
-        self._ispecies = 0 # species index
+        self._ispecies = self._data.nspecies # species index
         self._iptcldist = 0 # 0: g; 1: f; 2: delta f
         self._ani_playing = False # whether animation is playing
 
@@ -105,10 +51,11 @@ class VisualApp:
         self._levels = (np.arange(64) - 31.5) / 31.5
 
         # formatters
-        self._scalar_t_formatter = XScalarFormatter( \
+        self._scalar_t_formatter = XScalarFormatter.XScalarFormatter( \
             useOffset = True, useMathText = True, precision = 2)
         self._scalar_t_formatter.set_powerlimits((-2, 3))
-        self._ptcldist_xv_colorbar_formatter = XScalarFormatter( \
+        self._ptcldist_xv_colorbar_formatter \
+            = XScalarFormatter.XScalarFormatter( \
             useOffset = True, useMathText = True, precision = 2)
         self._ptcldist_xv_colorbar_formatter.set_powerlimits((-2, 3))
 
@@ -127,13 +74,13 @@ class VisualApp:
         self._ax_ptcldist_v = self._fig.add_axes([0.8, 0.045, 0.18, 0.44])
         # widgets
         self._ax_scalar_chooser = self._fig.add_axes([0.45, 0.85, 0.08, 0.1])
-        self._ax_scalar_chooser.set_title('scalar')
+        self._ax_scalar_chooser.set_title('Scalar')
         self._ax_mode_chooser = self._fig.add_axes([0.45, 0.7, 0.08, 0.1])
         self._ax_mode_chooser.set_title('Fourier mode')
         self._ax_ptcldist_chooser = self._fig.add_axes([0.45, 0.55, 0.08, 0.1])
-        self._ax_ptcldist_chooser.set_title('distribution')
+        self._ax_ptcldist_chooser.set_title('Distribution')
         self._ax_species_chooser = self._fig.add_axes([0.45, 0.4, 0.08, 0.1])
-        self._ax_species_chooser.set_title('species')
+        self._ax_species_chooser.set_title('Species')
         self._ax_ani_playpause = self._fig.add_axes([0.45, 0.25, 0.08, 0.04])
 
         # clicking on window: time chooser and time range chooser
@@ -164,9 +111,9 @@ class VisualApp:
 
         # species chooser
         self._species_labels = []
-        for i in range(self._data.nspecies):
-            self._species_labels.append(str(i + 1))
-        self._species_labels.append('sum')
+        for ispecies in range(self._data.nspecies):
+            self._species_labels.append(str(ispecies + 1))
+        self._species_labels.append('Sum')
         self._species_chooser = widgets.RadioButtons( \
             self._ax_species_chooser, self._species_labels, \
             active = self._ispecies)
@@ -430,6 +377,7 @@ class VisualApp:
         self.update_plot_ptcldist_xv()
         self.update_plot_ptcldist_v()
         plt.draw()
+# end of class VisualApp
 
 
 if __name__ == '__main__':
@@ -439,6 +387,6 @@ if __name__ == '__main__':
         nargs = '?', type = str, default = './')
     args = parser.parse_args()
 
-    app = VisualApp(args.data_path)
+    visapp = VisualApp(args.data_path)
     plt.show()
 
