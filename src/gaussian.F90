@@ -101,12 +101,12 @@ end if
 seeds(:) = clock
 if (present(mype)) then
   seeds(:) = seeds(:) + primes1( &
-    mod(clock + primes2(mod(clock, nprime)) * mype, nprime) &
+    mod(abs(clock + primes2(mod(abs(clock), nprime)) * mype), nprime) &
   ) * mype
 end if
 do iseed = 1, nseed
   seeds(iseed) = seeds(iseed) + primes2( &
-    mod(seeds(iseed) + primes1(mod(clock, nprime)) * iseed, nprime) &
+    mod(abs(seeds(iseed) + primes1(mod(abs(clock), nprime)) * iseed), nprime) &
   ) * iseed
 end do
 call random_seed(put = seeds)
