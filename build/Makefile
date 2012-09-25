@@ -26,7 +26,7 @@ endif
 # compiling options
 ifndef FFLAGS
 #	FFLAGS := -g -fbounds-check -ffpe-trap=invalid,zero,overflow # for debugging
-	FFLAGS := -O2
+	FFLAGS := -O3 #-ffast-math -funroll-loops
 endif
 
 # source file path

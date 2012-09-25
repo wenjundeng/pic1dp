@@ -28,7 +28,7 @@ use pic1dp_output
 implicit none
 #include "finclude/petsc.h90"
 
-character(len = 25), parameter :: version = '2012-09-05 18:08:32-04:00'
+character(len = 25), parameter :: version = '2012-09-25 19:03:34-04:00'
 
 ! wall clock timer indexes
 PetscInt, parameter :: &
@@ -39,17 +39,18 @@ PetscInt, parameter :: &
   iwt_particle_shape = 5, &
   iwt_collect_charge = 6, &
   iwt_field_electric = 7, &
-  iwt_particle_merge = 8, &
+  iwt_particle_mergesplit = 8, &
   iwt_output = 9, &
   iwt_final = 10
 
 PetscInt :: nrk ! # of Runge-Kutta sub-steps
 PetscInt :: irk ! indexing Runge-Kutta sub-steps
 
-PetscInt :: imerge ! indexing particle merge times
+! indexing particle merge, throw away, split times
+PetscInt :: imerge, ithrowaway, isplit
 
-! termination related variables
-PetscInt :: itermination ! status of termination condition: 0: not to terminate; 1: to terminate
+! status of termination condition: 0: not to terminate; 1: to terminate
+PetscInt :: itermination
 
 ! for wall clock timers
 character(len = 18), dimension(30) :: string_wt
@@ -64,13 +65,15 @@ call wtimer_start(iwt_total) ! start recording total time
 call wtimer_start(iwt_init)
 call MPI_Comm_rank(MPI_COMM_WORLD, global_mype, global_ierr)
 CHKERRQ(global_ierr)
+call MPI_Comm_size(MPI_COMM_WORLD, global_npe, global_ierr)
+CHKERRQ(global_ierr)
 if (input_verbosity >= 1) &
   call global_pp("PIC1D-PETSc version " // version // "\n")
 ! check input parameters
 if (&
-  (input_iptcldist == 1 .or. input_iptcldist == 2) .and. input_imarker == 1 &
+  input_iptcldist >= 1 .and. input_imarker == 1 &
 ) then
-  call global_pp("Error: case of input_iptcldist = 1 or 2 and input_")
+  call global_pp("Error: case of input_iptcldist >= 1 and input_")
   call global_pp("imarker = 1 not implemented yet.\n")
   stop 1
 end if
@@ -94,9 +97,8 @@ if (input_iptclshape < 4) then
   call wtimer_stop(iwt_particle_shape)
 end if
 if (input_verbosity >= 1) then
-  write (global_msg, '(a, i10, a, i2, a, i10, a)') &
-    'Info: loaded # of particles: ', input_nparticle, ' * ', input_nspecies, &
-    ' = ', input_nparticle * input_nspecies, "\n"
+  write (global_msg, '(a, i10, a)') &
+    'Info: loaded # of particles: ', sum(input_species_nparticle_init), "\n"
   call global_pp(global_msg)
 end if
 
@@ -106,6 +108,16 @@ if (input_nmerge > 0) then
   imerge = 1
 else
   imerge = 0
+end if
+if (input_nthrowaway > 0) then
+  ithrowaway = 1
+else
+  ithrowaway = 0
+end if
+if (input_nsplit > 0) then
+  isplit = 1
+else
+  isplit = 0
 end if
 
 ! solve initial field
@@ -139,24 +151,66 @@ do while (itermination == 0)
     call interaction_push_particle(irk)
     call wtimer_stop(iwt_push_particle)
 
-    ! merge non-resonant particles
+    ! merge not important particles
     if (input_deltaf == 1 &
-      .and. imerge > 0 .and. imerge <= size(input_tmerge)) then
-      if (global_time + input_dt >= input_tmerge(imerge) .and. irk == 2) then
-        call wtimer_start(iwt_particle_merge)
-        ! set resonant fraction threshold
-        !particle_df_thsh_res_frac = 0.2_kpr
-        particle_df_thsh_res_frac = 0.01_kpr * imerge
-        ! detect and mark resonant particles
-        call particle_detect_resonant
+      .and. imerge > 0 .and. imerge <= input_nmerge) then
+      if ( &
+        global_time + input_dt >= input_tmerge(imerge) &
+        .and. irk == 2 &
+      ) then
+        call wtimer_start(iwt_particle_mergesplit)
+        ! calculate absolute value of perturbed distribution in v
+        call particle_compute_dist_pertb_abs_v
         ! perform merging
-        call particle_merge
-        call wtimer_stop(iwt_particle_merge)
+        call particle_merge(input_thshmerge(imerge))
+        call wtimer_stop(iwt_particle_mergesplit)
         ! print out information
         call wtimer_start(iwt_output)
         call output_progress(1)
         call wtimer_stop(iwt_output)
         imerge = imerge + 1
+      end if
+    end if
+
+    ! throw away some not important particles
+    if (input_deltaf == 1 &
+      .and. ithrowaway > 0 .and. ithrowaway <= input_nthrowaway) then
+      if ( &
+        global_time + input_dt >= input_tthrowaway(ithrowaway) &
+        .and. irk == 2 &
+      ) then
+        call wtimer_start(iwt_particle_mergesplit)
+        ! calculate absolute value of perturbed distribution in v
+        call particle_compute_dist_pertb_abs_v
+        ! perform throwing away
+        call particle_throwaway(input_thshthrowaway(ithrowaway))
+        call wtimer_stop(iwt_particle_mergesplit)
+        ! print out information
+        call wtimer_start(iwt_output)
+        call output_progress(1)
+        call wtimer_stop(iwt_output)
+        ithrowaway = ithrowaway + 1
+      end if
+    end if
+
+    ! split important particles
+    if (input_deltaf == 1 &
+      .and. isplit > 0 .and. isplit <= input_nsplit) then
+      if ( &
+        global_time + input_dt >= input_tsplit(isplit) &
+        .and. irk == 2 &
+      ) then
+        call wtimer_start(iwt_particle_mergesplit)
+        ! calculate absolute value of perturbed distribution in v
+        call particle_compute_dist_pertb_abs_v
+        ! perform splitting
+        call particle_split(input_thshsplit(isplit))
+        call wtimer_stop(iwt_particle_mergesplit)
+        ! print out information
+        call wtimer_start(iwt_output)
+        call output_progress(1)
+        call wtimer_stop(iwt_output)
+        isplit = isplit + 1
       end if
     end if
 
@@ -237,14 +291,15 @@ if (input_verbosity >= 1) then
     // string_wt(iwt_field_electric) // string_wt(iwt_output) // "\n")
 
   call global_pp( &
-    "   particle merge     finalization    MPI_Allreduce          scatter\n")
-  call wtimer_print(iwt_particle_merge, string_wt(iwt_particle_merge), iwt_total, .true.)
+    "ptcl mrg/thr/splt     finalization                .                .\n")
+  call wtimer_print(iwt_particle_mergesplit, &
+    string_wt(iwt_particle_mergesplit), iwt_total, .true.)
   call wtimer_print(iwt_final, string_wt(iwt_final), iwt_total, .true.)
-  call wtimer_print(21, string_wt(21), iwt_total, .true.)
-  call wtimer_print(22, string_wt(22), iwt_total, .true.)
-  call global_pp(string_wt(iwt_particle_merge) // string_wt(iwt_final) // &
-    string_wt(21) // string_wt(22) // "\n")
-!  call global_pp(string_wt(iwt_final) // "\n")
+  !call wtimer_print(21, string_wt(21), iwt_total, .true.)
+  !call wtimer_print(22, string_wt(22), iwt_total, .true.)
+  call global_pp(string_wt(iwt_particle_mergesplit) // string_wt(iwt_final) &
+    !// string_wt(21) // string_wt(22) &
+    // "\n")
 end if
 
 call PetscFinalize(global_ierr)

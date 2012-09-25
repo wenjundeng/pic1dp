@@ -8,7 +8,7 @@ run/pic1dp
 run/pic1dp.log
 run/*.out*
 
-visual/*.pyc
+tools/*.pyc
 
 doc/*.aux
 doc/*.out

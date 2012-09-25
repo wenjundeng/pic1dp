@@ -22,7 +22,7 @@
 MPIF90 := mpif90
 
 # compiling options
-FFLAGS := -O2
+FFLAGS := -O3
 
 # MPI executor
 MPIEXEC := mpiexec
@@ -47,7 +47,7 @@ run : build/pic1dp
 	$(MAKE) -C ./run run
 
 visual :
-	./visual/visual.py ./run
+	./tools/visual.py ./run
 
 doc :
 	$(MAKE) -C ./doc

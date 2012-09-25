@@ -35,7 +35,7 @@ implicit none
 #include "finclude/petsc.h90"
 
 PetscInt :: ispecies, ip, ix
-PetscScalar, dimension(:), pointer :: pw, pc, px, ps
+PetscScalar, dimension(:), pointer :: pw, pc, px
 PetscScalar :: sx
 
 if (input_iptclshape < 3) then
@@ -88,12 +88,7 @@ else
       call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
       CHKERRQ(global_ierr)
     end if
-    call VecGetArrayF90(particle_s(ispecies), ps, global_ierr)
-    CHKERRQ(global_ierr)
-    do ip = 1, particle_ip_high - particle_ip_low
-      ! ignore invalid particles
-      if (ps(ip) < -0.5_kpr) cycle
-
+    do ip = 1, particle_np(ispecies)
       if (input_iptclshape == 3) then
         ix = particle_shape_x_indexes(ispecies, ip)
         sx = particle_shape_x_values(ispecies, ip)
@@ -111,7 +106,7 @@ else
       ix = ix + 1
       if (ix > input_nx - 1) ix = 0
       field_arr_charge1(ix) = field_arr_charge1(ix) + (1.0_kpr - sx) * pw(ip)
-    end do ! ip = 1, particle_ip_high - particle_ip_low
+    end do ! ip = 1, particle_np(ispecies)
     if (input_iptclshape == 4) then
       call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
       CHKERRQ(global_ierr)
@@ -123,8 +118,6 @@ else
       call VecRestoreArrayF90(particle_p(ispecies), pw, global_ierr)
       CHKERRQ(global_ierr)
     end if
-    call VecRestoreArrayF90(particle_s(ispecies), ps, global_ierr)
-    CHKERRQ(global_ierr)
     field_arr_charge2(:) = field_arr_charge2(:) &
       + field_arr_charge1(:) * input_species_charge(ispecies)
   end do ! ispecies = 1, input_nspecies
@@ -170,7 +163,7 @@ PetscInt, intent(in) :: irk ! index of Runge-Kutta sub-step
 PetscInt :: ispecies, ix
 PetscInt :: ip
 PetscScalar :: sx, electric, tmp1, tmp2
-PetscScalar, dimension(:), pointer :: pe, pptcl, ppe, px, pv, pp, pw, ps
+PetscScalar, dimension(:), pointer :: pe, pptcl, ppe, px, pv, pp, pw
 PetscScalar, dimension(:), pointer :: pxb, pvb, pwb
 
 PetscScalar :: dt ! time step
@@ -224,8 +217,6 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
   call VecGetArrayF90(particle_p(ispecies), pp, global_ierr)
   CHKERRQ(global_ierr)
-  call VecGetArrayF90(particle_s(ispecies), ps, global_ierr)
-  CHKERRQ(global_ierr)
 
   call VecGetArrayF90(particle_x_bak(ispecies), pxb, global_ierr)
   CHKERRQ(global_ierr)
@@ -237,10 +228,7 @@ do ispecies = 1, input_nspecies
     call VecGetArrayF90(particle_w_bak(ispecies), pwb, global_ierr)
     CHKERRQ(global_ierr)
   end if
-  do ip = 1, particle_ip_high - particle_ip_low
-    ! ignore invalid particles
-    if (ps(ip) < -0.5_kpr) cycle
-
+  do ip = 1, particle_np(ispecies)
     ! get electric field at particle
     if (input_iptclshape <= 2) then
       electric = ppe(ip)
@@ -295,10 +283,39 @@ do ispecies = 1, input_nspecies
           * input_species_temperature(ispecies) &
           / input_species_mass(ispecies)))) &
           * input_species_mass(ispecies) / input_species_temperature(ispecies)
+      elseif (input_iptcldist == 3) then ! bump-on-tail
+        tmp2 = (input_species_density(ispecies) * pv(ip) / &
+          (input_species_temperature(ispecies) &
+          / input_species_mass(ispecies)) &
+          * exp(-pv(ip)**2 / (2.0_kpr &
+          * input_species_temperature(ispecies) &
+          / input_species_mass(ispecies))) &
+          / sqrt(input_species_temperature(ispecies) &
+          / input_species_mass(ispecies)) &
+          + (1.0_kpr - input_species_density(ispecies)) &
+          * (pv(ip) - input_species_v0(ispecies)) / &
+          (input_species_temperature2(ispecies) &
+          / input_species_mass(ispecies)) &
+          * exp(-(pv(ip) - input_species_v0(ispecies))**2 / (2.0_kpr &
+          * input_species_temperature2(ispecies) &
+          / input_species_mass(ispecies))) &
+          / sqrt(input_species_temperature2(ispecies) &
+          / input_species_mass(ispecies))) &
+          / (input_species_density(ispecies) * exp(-pv(ip)**2 / (2.0_kpr &
+          * input_species_temperature(ispecies) &
+          / input_species_mass(ispecies))) &
+          / sqrt(input_species_temperature(ispecies) &
+          / input_species_mass(ispecies)) &
+          + (1.0_kpr - input_species_density(ispecies)) &
+          * exp(-(pv(ip) - input_species_v0(ispecies))**2 / (2.0_kpr &
+          * input_species_temperature2(ispecies) &
+          / input_species_mass(ispecies))) &
+          / sqrt(input_species_temperature2(ispecies) &
+          / input_species_mass(ispecies)))
       else ! (shifted) Maxwellian
         tmp2 = (pv(ip) - input_species_v0(ispecies)) &
-          * input_species_temperature(ispecies) &
-          / input_species_mass(ispecies)
+          / (input_species_temperature(ispecies) &
+          / input_species_mass(ispecies))
       end if
       ! end of calculating -d f_0 / d v / f_0 and storing in tmp2
 
@@ -312,14 +329,12 @@ do ispecies = 1, input_nspecies
       pv(ip) = pvb(ip) + dt * electric * input_species_charge(ispecies) &
         / input_species_mass(ispecies)
     end if 
-  end do ! ip = 1, particle_ip_high - particle_ip_high
+  end do ! ip = 1, particle_np(ispecies)
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
   call VecRestoreArrayF90(particle_v(ispecies), pv, global_ierr)
   CHKERRQ(global_ierr)
   call VecRestoreArrayF90(particle_p(ispecies), pp, global_ierr)
-  CHKERRQ(global_ierr)
-  call VecRestoreArrayF90(particle_s(ispecies), ps, global_ierr)
   CHKERRQ(global_ierr)
 
   call VecRestoreArrayF90(particle_x_bak(ispecies), pxb, global_ierr)

@@ -1,204 +1,43 @@
 #!/usr/bin/env python
+
+# Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+#
+# This file is part of PIC1D-PETSc
+#
+# PIC1D-PETSc is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# PIC1D-PETSc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
+
+
 """PIC1D-PETSc visualization app"""
 
-import os
 import argparse
+import os
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.pylab as plb
 import matplotlib.widgets as widgets
-import XPetscBinaryIO
-
-class XScalarFormatter(mpl.ticker.ScalarFormatter):
-    """eXtended ScalarFormatter"""
-
-    def __init__(self, useOffset = True, useMathText = False, \
-        useLocale = None, precision = None):
-
-        mpl.ticker.ScalarFormatter.__init__(\
-            self, useOffset, useMathText, useLocale)
-        self._precision = precision
-
-    def set_precision(self, precision):
-        """use this function to set precision"""
-        self._precision = precision
-
-    def get_offset(self):
-        """Return scientific notation, plus offset"""
-        if len(self.locs)==0: return ''
-        s = ''
-        if self.orderOfMagnitude or self.offset:
-            offsetStr = ''
-            sciNotStr = ''
-            if self.offset:
-                offsetStr = self.format_data(self.offset)
-                if self.offset > 0: offsetStr = '+' + offsetStr
-            if self.orderOfMagnitude:
-                if self._usetex or self._useMathText:
-                    sciNotStr = self.format_data(10**self.orderOfMagnitude)
-                else:
-                    sciNotStr = '1e%d'% self.orderOfMagnitude
-            if self._usetex or self._useMathText:
-                if sciNotStr != '':
-                    sciNotStr = r'\times%s' % sciNotStr
-                s =  ''.join(('$',sciNotStr,offsetStr,'$'))
-            else:
-                s =  ''.join((sciNotStr,offsetStr))
-
-        return self.fix_minus(s)
-
-    def _set_format(self):
-        # set the format string to format all the ticklabels
-        # The floating point black magic (adding 1e-15 and formatting
-        # to 8 digits) may warrant review and cleanup.
-        locs = (np.asarray(self.locs)-self.offset) / 10**self.orderOfMagnitude+1e-15
-        sigfigs = [len(str('%1.8f'% loc).split('.')[1].rstrip('0')) \
-                   for loc in locs]
-        sigfigs.sort()
-        if self._precision is None:
-            self.format = '%1.' + str(sigfigs[-1]) + 'f'
-        else:
-            self.format = '%1.' + str(self._precision) + 'f'
-
-        if self._usetex or self._useMathText:
-            self.format = '$%s$' % self.format
-
-
-class OutputData:
-    """class for handling PIC1D-PETSc output data"""
-
-    def __init__(self, datapath):
-        #self._datapath = datapath
-        io = XPetscBinaryIO.XPetscBinaryIO()
-        fdata = open(os.path.join(datapath, 'pic1dp.out'), 'rb')
-
-        # read parameters
-        self.nspecies, self.nmode, self.nx, self.nv = io.readInt(fdata, 4)
-        self.mode = io.readInt(fdata, self.nmode)
-        self.lx, self.v_max = io.readReal(fdata, 2)
-
-        #print self.nspecies, self.nmode, self.nx, self.nv
-        #print self.mode
-        #print self.lx, self.v_max
-
-        # generate arrays for axises
-        self.x = np.arange(self.nx + 1.0) / self.nx * self.lx
-        self.v = (np.arange(self.nv + 0.0) / (self.nv - 1) - 0.5) * 2.0 * self.v_max
-        self.xv = np.meshgrid(self.x, self.v)
-
-        # read time dependent data
-        self._rawdataset = []
-        try: # read until EOF
-            while True:
-                rawdata = []
-                # scalars # index 0
-                rawdata.append(io.readReal(fdata, self.nspecies * 3 + 2))
-                # electric field Fourier components
-                header = io.readInt(fdata, 1)[0]
-                rawdata.append(io.readVec(fdata)) # index 1
-                header = io.readInt(fdata, 1)[0]
-                rawdata.append(io.readVec(fdata)) # index 2
-                # electric field and charge density in x space
-                header = io.readInt(fdata, 1)[0]
-                rawdata.append(io.readVec(fdata)) # index 3
-                header = io.readInt(fdata, 1)[0]
-                rawdata.append(io.readVec(fdata)) # index 4
-                # distribution in x-v
-                for i in range(self.nspecies):
-                    for i in range(3):
-                        rawdata.append(io.readScalar(fdata, self.nx * self.nv))
-
-                    for i in range(3):
-                        rawdata.append(io.readScalar(fdata, self.nv))
-
-                #print rawdata
-                self._rawdataset.append(rawdata)
-        except (MemoryError, IndexError):
-            pass
-
-        fdata.close()
-
-        self.ntime = len(self._rawdataset)
-        print '# of time steps read:', self.ntime
-
-    def get_scalar_t(self):
-        '''get data of scalar vs t'''
-        scalar_t = np.zeros(((self.nspecies + 1) * 3 + 2, self.ntime))
-        for itime in range(self.ntime):
-            rawdata = self._rawdataset[itime]
-            scalar_t[0 : self.nspecies * 3 + 2, itime] = rawdata[0]
-            # calculate summation from all species
-            for ispecies in range(self.nspecies):
-                scalar_t[self.nspecies * 3 + 2, itime] += rawdata[0][ispecies * 3 + 2]
-                scalar_t[self.nspecies * 3 + 3, itime] += rawdata[0][ispecies * 3 + 3]
-                scalar_t[self.nspecies * 3 + 4, itime] += rawdata[0][ispecies * 3 + 4]
-
-        return scalar_t
-
-    def get_mode_t(self):
-        '''get data of electric field Fourier mode vs t'''
-        mode_t = np.zeros((self.nmode * 2, self.ntime))
-        for itime in range(self.ntime):
-            rawdata = self._rawdataset[itime]
-            mode_t[0 : self.nmode, itime] = rawdata[1]
-            mode_t[self.nmode : self.nmode * 2, itime] = rawdata[2]
-
-        return mode_t
-
-    def get_field_x(self, itime):
-        '''get data of electric field and charge density vs x'''
-        field_x = np.zeros((2, self.nx + 1))
-        rawdata = self._rawdataset[itime]
-        field_x[0, : self.nx] = rawdata[3]
-        field_x[1, : self.nx] = rawdata[4]
-
-        # boundary condition
-        for i in range(2):
-            field_x[i, self.nx] = field_x[i, 0]
-
-        return field_x
-
-    def get_ptcldist_xv(self, itime, ispecies, iptcldist, periodicbound = True):
-        '''get data of particle distribution in x-v plane'''
-        if periodicbound:
-            ptcldist_xv = np.zeros((self.nv, self.nx + 1))
-        else:
-            ptcldist_xv = np.zeros((self.nv, self.nx))
-
-        rawdata = self._rawdataset[itime]
-        if ispecies < self.nspecies:
-            ptcldist_xv[:, 0 : self.nx] \
-                = rawdata[5 + ispecies * 6 + iptcldist].reshape((self.nv, self.nx))
-        else:
-            for i in range(self.nspecies):
-                ptcldist_xv[:, 0 : self.nx] \
-                    += rawdata[5 + i * 6 + iptcldist].reshape((self.nv, self.nx))
-        if periodicbound:
-            ptcldist_xv[:, self.nx] = ptcldist_xv[:, 0] # boundary condition
-
-        return ptcldist_xv
-
-    def get_ptcldist_v(self, itime, ispecies, iptcldist):
-        '''get data of particle distribution in v space'''
-        rawdata = self._rawdataset[itime]
-        if ispecies < self.nspecies:
-            return rawdata[8 + ispecies * 6 + iptcldist]
-        else:
-            ret = np.zeros((self.nv))
-            for i in range(self.nspecies):
-                ret += rawdata[8 + i * 6 + iptcldist]
-            return ret
-
+import OutputData
+import XScalarFormatter
 
 class VisualApp:
-    """class of visualization app"""
+    """Class of visualization app"""
 
     def __init__(self, datapath):
-        """initialization"""
+        """Initialization"""
 
         # object that handles output data
-        self._data = OutputData(datapath)
+        self._data = OutputData.OutputData(datapath)
 
         # time dependent data for plotting
         self._scalar_t = self._data.get_scalar_t()
@@ -210,7 +49,7 @@ class VisualApp:
         self._itime = 0 # time index
         self._itime1 = 0 # time range index 1
         self._itime2 = self._data.ntime # time range index 2
-        self._ispecies = 0 # species index
+        self._ispecies = self._data.nspecies # species index
         self._iptcldist = 0 # 0: g; 1: f; 2: delta f
         self._ani_playing = False # whether animation is playing
 
@@ -231,15 +70,17 @@ class VisualApp:
         self._levels = (np.arange(64) - 31.5) / 31.5
 
         # formatters
-        self._scalar_t_formatter = XScalarFormatter( \
+        self._scalar_t_formatter = XScalarFormatter.XScalarFormatter( \
             useOffset = True, useMathText = True, precision = 2)
         self._scalar_t_formatter.set_powerlimits((-2, 3))
-        self._ptcldist_xv_colorbar_formatter = XScalarFormatter( \
+        self._ptcldist_xv_colorbar_formatter \
+            = XScalarFormatter.XScalarFormatter( \
             useOffset = True, useMathText = True, precision = 2)
         self._ptcldist_xv_colorbar_formatter.set_powerlimits((-2, 3))
 
         # layout
         self._fig = plt.figure(figsize = (22, 11))
+        self._fig.canvas.set_window_title(os.path.abspath(datapath))
         # plots
         self._ax_scalar_t = self._fig.add_axes([0.04, 0.53, 0.18, 0.44])
         self._ax_mode_t = self._fig.add_axes([0.04, 0.045, 0.18, 0.44])
@@ -252,9 +93,13 @@ class VisualApp:
         self._ax_ptcldist_v = self._fig.add_axes([0.8, 0.045, 0.18, 0.44])
         # widgets
         self._ax_scalar_chooser = self._fig.add_axes([0.45, 0.85, 0.08, 0.1])
+        self._ax_scalar_chooser.set_title('Scalar')
         self._ax_mode_chooser = self._fig.add_axes([0.45, 0.7, 0.08, 0.1])
+        self._ax_mode_chooser.set_title('Fourier mode')
         self._ax_ptcldist_chooser = self._fig.add_axes([0.45, 0.55, 0.08, 0.1])
+        self._ax_ptcldist_chooser.set_title('Distribution')
         self._ax_species_chooser = self._fig.add_axes([0.45, 0.4, 0.08, 0.1])
+        self._ax_species_chooser.set_title('Species')
         self._ax_ani_playpause = self._fig.add_axes([0.45, 0.25, 0.08, 0.04])
 
         # clicking on window: time chooser and time range chooser
@@ -285,9 +130,9 @@ class VisualApp:
 
         # species chooser
         self._species_labels = []
-        for i in range(self._data.nspecies):
-            self._species_labels.append(str(i + 1))
-        self._species_labels.append('sum')
+        for ispecies in range(self._data.nspecies):
+            self._species_labels.append(str(ispecies + 1))
+        self._species_labels.append('Sum')
         self._species_chooser = widgets.RadioButtons( \
             self._ax_species_chooser, self._species_labels, \
             active = self._ispecies)
@@ -551,6 +396,7 @@ class VisualApp:
         self.update_plot_ptcldist_xv()
         self.update_plot_ptcldist_v()
         plt.draw()
+# end of class VisualApp
 
 
 if __name__ == '__main__':
@@ -560,6 +406,6 @@ if __name__ == '__main__':
         nargs = '?', type = str, default = './')
     args = parser.parse_args()
 
-    app = VisualApp(args.data_path)
+    visapp = VisualApp(args.data_path)
     plt.show()
 
