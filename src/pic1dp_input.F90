@@ -43,9 +43,6 @@ PetscReal, parameter :: input_time_max = 500.0_kpr
 PetscInt, parameter :: input_linear = 0
 
 ! length in real space (normalized by electron Debye length)
-!PetscReal, parameter :: input_lx = 15.708_kpr  ! k = 0.4
-!PetscReal, parameter :: input_lx = 20.0_kpr * 3.141592653589793238_kpr
-!PetscReal, parameter :: input_lx = 20.94395_kpr
 PetscReal, parameter :: &
   input_lx = 2.0_kpr * 3.141592653589793238_kpr / 0.36_kpr
 
@@ -66,13 +63,6 @@ PetscInt, parameter :: input_nspecies = 1
 ! and equilibrium flow (normalized by electron thermal velocity)
 ! temperature and equilibrium flow are not used for input_iptcldist = 1
 ! temperature2 is the beam temperature for input_iptcldist = 3
-!PetscReal, dimension(input_nspecies), parameter :: &
-!  input_species_charge = (/ -1.0_kpr, -1.0_kpr /), &
-!  input_species_mass = (/ 1.0_kpr, 1.0_kpr /), &
-!  input_species_temperature = (/ 1.0_kpr, 0.25_kpr /), &
-!  input_species_temperature2 = (/ 1.0_kpr, 1.0_kpr /), &
-!  input_species_density = (/ 0.90_kpr, 0.10_kpr /), &
-!  input_species_v0 = (/ 0.0_kpr, 4.5_kpr /)
 PetscReal, dimension(input_nspecies), parameter :: &
   input_species_charge = (/ -1.0_kpr /), &
   input_species_mass = (/ 1.0_kpr /), &
@@ -140,6 +130,10 @@ PetscInt, parameter :: input_nx = 64
 ! # of grid points in velocity space for output and resonant detection
 PetscInt, parameter :: input_nv = 128
 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! marker particle optimizations !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! # of times of merging particles
 ! (set to 0 to disable merging)
 PetscInt, parameter :: input_nmerge = 0
@@ -235,8 +229,6 @@ implicit none
 PetscScalar, intent(in) :: v
 PetscInt, intent(in) :: ispecies
 
-PetscScalar :: omega_r, omega_i, k
-
 ! for constant 1.0, the perturbation shape is the same as the marker particle
 ! distribution in velocity space
 input_pertb_shape = 1.0_kpr
@@ -250,12 +242,6 @@ input_pertb_shape = 1.0_kpr
 
 !input_pertb_shape = v**30 * exp(-v * v) * 1e-8_kpr
 
-!k = 0.4_kpr
-!omega_r = 1.10625_kpr
-!omega_i = 0.0136088_kpr
-
-!input_pertb_shape = (omega_r - k * v) / ((omega_r - k * v)**2 + omega_i**2) &
-!  * (v - input_species_v0(ispecies)) / input_species_temperature(ispecies)
 end function input_pertb_shape
 
 end module pic1dp_input

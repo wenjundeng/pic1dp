@@ -1,6 +1,6 @@
 PIC1D-PETSc
 ===========
-version 2012-09-05 18:08:32-04:00
+version 2012-09-25 19:03:34-04:00
 ---------------------------------
 
 PIC1D-PETSc (pic1dp) is a code simulating 1D electrostatic plasma by solving
@@ -37,7 +37,7 @@ scalars.  PIC1D-PETSc has been tested with
 [MPICH2](http://www.mcs.anl.gov/research/projects/mpich2/) 1.4,
 [OpenMPI](http://www.open-mpi.org/) 1.5 and PETSc 3.2.
 
-PIC1D-PETSc also requires a Fortran 90 compiler for compilation.  PIC1D-PETSc
+PIC1D-PETSc also requires a Fortran 95 compiler for compilation.  PIC1D-PETSc
 has been tested with [GNU Fortran](http://gcc.gnu.org/fortran/) 4.6.  [GNU core
 utilities](http://www.gnu.org/software/coreutils/) is required to use GNU make
 for automatic compilation.  If your system is GNU/Linux, it is likely that GNU
@@ -54,6 +54,8 @@ manually without using GNU make.
 The visualization app requires [Python](http://www.python.org/) 2.7+,
 [NumPy](http://numpy.scipy.org/) 1.4+ and
 [matplotlib](http://matplotlib.sourceforge.net/) 1.1+ to run.
+In addition to these, the app for numerical solution of analytic dispersion
+requires [SciPy](http://www.scipy.org/).
 
 The formulation document requires LaTeX to compile.  If you do not have LaTeX
 at hand, you can download a pdf copy of the formulation at:
@@ -89,13 +91,22 @@ compilation will be put here.
 	+ `src/wtimer.F90` -- A wall clock timer using MPI_Wtime().
 	+ `src/gaussian.F90` -- A Gaussian random number generator using polar form
 	of Box-Muller transform.
-+ `visual/` -- Visualization app for PIC1D-PETSc written in Python.
-	+ `visual/visual.py` -- The main program file for the visualization app.
-	+ `visual/XPetscBinaryIO.py` -- An extended PetscBinaryIO class.  The
++ `tools/` -- Various tools for data analysis and visualization written in
+Python.
+	+ `tools/visual.py` -- Visualizaiton App for PIC1D-PETSc.
+	+ `tools/runinfo.py` -- A tool to provide more detailed information, such
+	as more precise calculation of growth rate, about runs and compare
+	differences among runs.  Use `-h` option to see usage information.
+	+ `tools/dispersion.py` -- An app for numerical solution of analytic
+	dispersion.  Use `-h` option to see usage information.
+	+ `tools/OutputData.py` -- A class to deal with PIC1D-PETSc output data.
+	+ `tools/VisualDispersion.py` -- A class for plotting dispersion relation
+	and mode structure.
+	+ `tools/XPetscBinaryIO.py` -- An extended PetscBinaryIO class.  The
 	original PetscBinaryIO class is provided in
 	`${PETSC_DIR}/bin/pythonscripts/`, where `${PETSC_DIR}` is your PETSc install
 	directory.
-	+ `visual/rundiff.py` -- A tool to calculate difference of two runs
+	+ `tools/XScalarFormatter.py` -- An extended ScalarFormatter class.
 
 
 ### Input preparation
@@ -103,9 +114,9 @@ compilation will be put here.
 PIC1D-PETSc reads input parameters from `src/pic1dp_input.F90`.  Each parameter
 has detailed description in the comment lines above it.
 
-The default `src/pic1dp_input.F90` gives an electron two-stream instability
-with 0 real frequency and growth rate being 0.141.  Numbers are normalized by
-electron plasma oscillation frequency.
+The default `src/pic1dp_input.F90` gives an electron bump-on-tail instability
+with parameters described in Section V.A.2 in [Physical Review E 83, 056402
+(2011)](http://dx.doi.org/10.1103/PhysRevE.83.056402).
 
 
 ### Compilation
@@ -115,7 +126,7 @@ code with the included Makefile.  Before compiling, open the Makefile and go to
 the place after the license part, you will see a few parameters, such as
 compiler name, compiling options, MPI executor, etc., defined there.  Adjust
 them according to your system environment.  After saving your adjustments, and
-making sure MPI Fortran 90 compiler and PETSc are installed correctly, you can
+making sure MPI Fortran 95 compiler and PETSc are installed correctly, you can
 compile PIC1D-PETSc by executing in the terminal:
 
 	make

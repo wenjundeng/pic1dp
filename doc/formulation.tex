@@ -57,7 +57,7 @@
 \newcommand{\me}{\mathrm{e}}
 
 \title{1D electrostatic $\delta f$ particle-in-cell (PIC) formulation in vector-matrix form \\
-\large for \texttt{PIC1D-PETSc version 2012-09-05 18:08:32-04:00}}
+\large for \texttt{PIC1D-PETSc version 2012-09-25 19:03:34-04:00}}
 \author{Wenjun Deng}
 \maketitle
 
@@ -91,7 +91,7 @@ Decompose quantities into equilibrium part and perturbed part:
 \end{eqnarray}
 Note that equilibrium electrostatic field is zero, $E$ is perturbed field.
 
-Assume equilibrium distribution is Maxwellian, which is time-independent and uniform in $x$:
+Although now multiple options for equilibrium distribution are implemented in \texttt{PIC1D-PETSc}, here for simplicity, Maxwellian is taken, which is time-independent and uniform in $x$:
 \begin{eqnarray}
 	f_{0 \alpha} & = & f_{0 \alpha}(v) = \frac{n_{0 \alpha}}{\sqrt{2 \pi v_{\mathrm{th}, \alpha}^2}} \exp \left( \frac{v^2}{2 v_{\mathrm{th}, \alpha}^2} \right) \textrm{ ,} \\
 	v_{\mathrm{th}, \alpha} & \equiv & \frac{T_\alpha}{m_\alpha} \textrm{ ,} \\
