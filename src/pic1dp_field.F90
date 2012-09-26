@@ -196,6 +196,7 @@ end subroutine field_init
 ! solve electric field from charge !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine field_solve_electric
+use wtimer
 use pic1dp_global
 use pic1dp_input
 implicit none
@@ -203,6 +204,8 @@ implicit none
 
 PetscInt :: m, n
 PetscReal :: norm2
+
+call wtimer_start(global_iwt_field_electric)
 
 ! transform charge to partial Fourier space and scale by -i
 call MatMultTranspose(field_fourier_re, field_chargeden, &
@@ -241,6 +244,8 @@ CHKERRQ(global_ierr)
 !CHKERRQ(global_ierr)
 !write (global_msg, *) "norm2 of electric=", norm2, "\n"
 !call global_pp(global_msg)
+
+call wtimer_start(global_iwt_field_electric)
 
 end subroutine field_solve_electric
 

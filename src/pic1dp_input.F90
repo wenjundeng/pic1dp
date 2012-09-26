@@ -244,5 +244,32 @@ input_pertb_shape = 1.0_kpr
 
 end function input_pertb_shape
 
+
+!!!!!!!!!!!!!!!!!!!!!!!!
+! check input validity !
+!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine input_init
+implicit none
+#include "finclude/petsc.h90"
+
+! check input parameters
+if (&
+  input_iptcldist >= 1 .and. input_imarker == 1 &
+) then
+  call global_pp("Error: case of input_iptcldist >= 1 and input_")
+  call global_pp("imarker = 1 not implemented yet.\n")
+  call PetscFinalize(global_ierr)
+  CHKERRQ(global_ierr)
+  stop 1
+end if
+if (input_linear == 1 .and. input_deltaf == 0) then
+  call global_pp("Error: case of input_linear = 1 and input_deltaf = 0 no")
+  call global_pp("t implemented yet.\n")
+  call PetscFinalize(global_ierr)
+  CHKERRQ(global_ierr)
+  stop 1
+end if
+end subroutine input_init
+
 end module pic1dp_input
 

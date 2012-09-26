@@ -473,7 +473,7 @@ use pic1dp_particle
 implicit none
 #include "finclude/petsc.h90"
 
-! progress type. 0: regular; 1: merge/throw away/split particle output
+! progress type. 0: header; 1: regular; 2: merge/throw away/split particle output
 PetscInt, intent(in) :: progress_type
 
 ! electric energy, has to be provided if progress_type = 0
@@ -487,7 +487,7 @@ PetscInt :: nparticle_allspec, nparticle_allspec_redu
 
 if (input_verbosity == 0) return
 
-if (progress_type == 1) then
+if (progress_type == 2) then
   nparticle_allspec = sum(particle_np(:))
   call MPI_Reduce(nparticle_allspec, nparticle_allspec_redu, 1, &
     MPIU_INTEGER, MPI_SUM, 0, MPI_COMM_WORLD, global_ierr)
@@ -502,29 +502,34 @@ if (input_verbosity == 1) then
   else
     cprogress = 't'
   end if
-  if (progress_type == 1) then
-    write (global_msg, '(a, f5.1, a, i7, f9.3, a, i9, a)') &
-      cprogress, progress(iprogress), "%%", global_itime + 1, &
-      global_time + input_dt, &
-      ' : merge/throw away/split performed, current # of particles ', &
-      nparticle_allspec_redu, "\n"
-  else ! regular progress type
-    write (global_msg, '(a, f5.1, a, i7, f9.3, es12.3e3, a)') &
-      cprogress, progress(iprogress), "%%", global_itime, global_time, &
-      electric_energy, "\n"
-  end if ! else of if (progress_type == 1)
-  call global_pp(global_msg)
+  select case (progress_type)
+    case (0) ! header
+      global_msg = "Info: progress:\nprogrss  itime     time  int E^2 dx\n"
+    case (1) ! regular progress type
+      write (global_msg, '(a, f5.1, a, i7, f9.3, es12.3e3, a)') &
+        cprogress, progress(iprogress), "%%", global_itime, global_time, &
+        electric_energy, "\n"
+    case (2) ! particle_optimize
+      write (global_msg, '(a, f5.1, a, i7, f9.3, a, i9, a)') &
+        cprogress, progress(iprogress), "%%", global_itime + 1, &
+        global_time + input_dt, &
+        ' : optimization performed, current # of particles ', &
+        nparticle_allspec_redu, "\n"
+  end select
 else ! implying input_verbosity >= 2
-  if (progress_type == 1) then
-    write (global_msg, '(2a, i9, a)') &
-      'Info: particle_merge/throwaway/split performed, ', &
-      'current # of particles:', nparticle_allspec_redu, "\n"
-  else ! regular progress type
-    write (global_msg, '(a, i7, a, f9.3, a)') 'Info: finished itime = ', &
-      global_itime, ', time = ', global_time, "\n"
-  end if ! else of if (progress_type == 1)
-  call global_pp(global_msg)
+  select case (progress_type)
+    case (0) ! header
+      global_msg = ''
+    case (1) ! regular progress type
+      write (global_msg, '(a, i7, a, f9.3, a)') 'Info: finished itime = ', &
+        global_itime, ', time = ', global_time, "\n"
+    case (2) ! particle_optimize
+      write (global_msg, '(2a, i9, a)') &
+        'Info: particle_optimize performed, ', &
+        'current # of particles:', nparticle_allspec_redu, "\n"
+  end select
 end if ! else of if (input_versobity == 1)
+call global_pp(global_msg)
 
 end subroutine output_progress
 
@@ -533,17 +538,80 @@ end subroutine output_progress
 ! output all needed quantities !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine output_all
+use wtimer
 use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
 
 PetscReal :: electric_energy
 
+call wtimer_start(global_iwt_output)
+
 call output_field(electric_energy)
 call output_ptcldist
-call output_progress(0, electric_energy)
+call output_progress(1, electric_energy)
+
+call wtimer_stop(global_iwt_output)
 
 end subroutine output_all
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! output wall clock timers !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine output_wtimer
+use wtimer
+use pic1dp_global
+use pic1dp_input
+implicit none
+#include "finclude/petsc.h90"
+
+character(len = 18), dimension(30) :: string_wt
+
+if (input_verbosity == 0) return
+
+call global_pp("Info: timers:\n")
+call global_pp( &
+  "            total   initialization    particle load    push particle\n")
+call wtimer_print(global_iwt_total, string_wt(global_iwt_total), &
+  global_iwt_total, .true.)
+call wtimer_print(global_iwt_init, string_wt(global_iwt_init), &
+  global_iwt_total, .true.)
+call wtimer_print(global_iwt_particle_load, &
+  string_wt(global_iwt_particle_load), global_iwt_total, .true.)
+call wtimer_print(global_iwt_push_particle, &
+  string_wt(global_iwt_push_particle), global_iwt_total, .true.)
+call global_pp(string_wt(global_iwt_total) // string_wt(global_iwt_init) &
+  // string_wt(global_iwt_particle_load) &
+  // string_wt(global_iwt_push_particle) // "\n")
+
+call global_pp( &
+  "   particle shape   collect charge   electric field           output\n")
+call wtimer_print(global_iwt_particle_shape, &
+  string_wt(global_iwt_particle_shape), global_iwt_total, .true.)
+call wtimer_print(global_iwt_collect_charge, &
+  string_wt(global_iwt_collect_charge), global_iwt_total, .true.)
+call wtimer_print(global_iwt_field_electric, &
+  string_wt(global_iwt_field_electric), global_iwt_total, .true.)
+call wtimer_print(global_iwt_output, string_wt(global_iwt_output), &
+  global_iwt_total, .true.)
+call global_pp(string_wt(global_iwt_particle_shape) &
+  // string_wt(global_iwt_collect_charge) &
+  // string_wt(global_iwt_field_electric) &
+  // string_wt(global_iwt_output) // "\n")
+
+call global_pp( &
+  "ptcl optimization     finalization                .                .\n")
+call wtimer_print(global_iwt_particle_optimize, &
+  string_wt(global_iwt_particle_optimize), global_iwt_total, .true.)
+call wtimer_print(global_iwt_final, string_wt(global_iwt_final), &
+  global_iwt_total, .true.)
+call global_pp(string_wt(global_iwt_particle_optimize) &
+  // string_wt(global_iwt_final) &
+  !// string_wt(21) // string_wt(22) &
+  // "\n")
+
+end subroutine output_wtimer
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -28,15 +28,17 @@ contains
 ! collect charge from particle to field grid !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine interaction_collect_charge
+use wtimer
 use pic1dp_global
 use pic1dp_input
-use wtimer
 implicit none
 #include "finclude/petsc.h90"
 
 PetscInt :: ispecies, ip, ix
 PetscScalar, dimension(:), pointer :: pw, pc, px
 PetscScalar :: sx
+
+call wtimer_start(global_iwt_collect_charge)
 
 if (input_iptclshape < 3) then
   call VecSet(field_chargeden, 0.0_kpr, global_ierr)
@@ -145,20 +147,20 @@ else
   CHKERRQ(global_ierr)
 end if
 
+call wtimer_stop(global_iwt_collect_charge)
+
 end subroutine interaction_collect_charge
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! using field to push particle !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine interaction_push_particle(irk)
+subroutine interaction_push_particle
+use wtimer
 use pic1dp_global
 use pic1dp_input
-use wtimer
 implicit none
 #include "finclude/petsc.h90"
-
-PetscInt, intent(in) :: irk ! index of Runge-Kutta sub-step
 
 PetscInt :: ispecies, ix
 PetscInt :: ip
@@ -168,7 +170,9 @@ PetscScalar, dimension(:), pointer :: pxb, pvb, pwb
 
 PetscScalar :: dt ! time step
 
-if (irk == 1) then
+call wtimer_start(global_iwt_push_particle)
+
+if (global_irk == 1) then
   dt = 0.5_kpr * input_dt
   do ispecies = 1, input_nspecies
     call VecCopy(particle_x(ispecies), particle_x_bak(ispecies), global_ierr)
@@ -357,6 +361,8 @@ if (input_iptclshape == 3 .or. input_iptclshape == 4) then
   call VecRestoreArrayF90(field_electric_seq, pe, global_ierr)
   CHKERRQ(global_ierr)
 end if
+
+call wtimer_stop(global_iwt_push_particle)
 
 end subroutine interaction_push_particle
 
