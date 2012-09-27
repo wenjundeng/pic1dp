@@ -41,6 +41,24 @@ character(len = 5000) :: global_msg ! for messages and temporary strings
 
 PetscInt :: global_itime ! indexing time step
 PetscReal :: global_time ! physical time
+PetscInt :: global_irk ! indexing Runge-Kutta sub-step
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! wall clock timer parameters and variables !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! wall clock timer indexes
+PetscInt, parameter :: &
+  global_iwt_total = 1, &
+  global_iwt_init = 2, &
+  global_iwt_particle_load = 3, &
+  global_iwt_push_particle = 4, &
+  global_iwt_particle_shape = 5, &
+  global_iwt_collect_charge = 6, &
+  global_iwt_field_electric = 7, &
+  global_iwt_particle_optimize = 8, &
+  global_iwt_output = 9, &
+  global_iwt_final = 10
 
 contains
 

@@ -22,6 +22,9 @@ use pic1dp_input
 implicit none
 #include "finclude/petscdef.h"
 
+! indexing particle optimization operations
+PetscInt :: particle_imerge, particle_ithrowaway, particle_isplit
+
 ! particle x coordinate, velocity
 ! equilibrium weight: p = f / g (nonlinear); p = f_0 / g (linear)
 ! perturbed weight: w = delta f / g
@@ -56,15 +59,32 @@ PetscScalar, dimension(input_nspecies, 0 : input_nv - 1) :: &
 
 contains
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! initialize PETSc objects !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! initialize PETSc objects and other variables !
+! (for particle loading, see particle_load)    !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine particle_init
 use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
 
 PetscInt :: ispecies
+
+if (input_nmerge > 0) then
+  particle_imerge = 1 
+else
+  particle_imerge = 0 
+end if
+if (input_nthrowaway > 0) then
+  particle_ithrowaway = 1 
+else
+  particle_ithrowaway = 0 
+end if
+if (input_nsplit > 0) then
+  particle_isplit = 1 
+else
+  particle_isplit = 0 
+end if
 
 call VecCreate(MPI_COMM_WORLD, particle_x(1), global_ierr)
 CHKERRQ(global_ierr)
@@ -123,15 +143,18 @@ end subroutine particle_init
 ! load particles !
 !!!!!!!!!!!!!!!!!!
 subroutine particle_load
+use wtimer
+use gaussian
 use pic1dp_global
 use pic1dp_input
-use gaussian
 implicit none
 #include "finclude/petsc.h90"
 
 PetscInt :: ispecies, ip, imode
 PetscInt :: nparticle_unload
 PetscScalar, dimension(:), pointer :: px, pv, pp, pw
+
+call wtimer_start(global_iwt_particle_load)
 
 call gaussian_init(input_seed_type, global_mype)
 
@@ -240,6 +263,8 @@ do ispecies = 1, input_nspecies
   end if
 end do
 
+call wtimer_stop(global_iwt_particle_load)
+
 end subroutine particle_load
 
 
@@ -247,6 +272,7 @@ end subroutine particle_load
 ! compute shape matrix in x !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine particle_compute_shape_x
+use wtimer
 use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
@@ -258,6 +284,8 @@ PetscScalar :: sx
 PetscScalar, dimension(:), pointer :: px
 PetscInt, dimension(0 : 1) :: indexes
 PetscScalar, dimension(0 : 1) :: values
+
+call wtimer_start(global_iwt_particle_shape)
 
 do ispecies = 1, input_nspecies
   if (input_iptclshape == 1) then
@@ -313,6 +341,8 @@ do ispecies = 1, input_nspecies
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
   CHKERRQ(global_ierr)
 end do ! ispecies = 1, input_nspecies
+
+call wtimer_stop(global_iwt_particle_shape)
 
 end subroutine particle_compute_shape_x
 
@@ -703,12 +733,78 @@ end do ! ispecies = 1, input_nspecies
 end subroutine particle_split
 
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! particle optimization, manage calling of merge/throwaway/split !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine particle_optimize(flag_optimized)
+use wtimer
+use pic1dp_global
+implicit none
+#include "finclude/petsc.h90"
+
+logical, intent(out) :: flag_optimized ! whether optimization is performed
+
+flag_optimized = .false.
+
+if (input_deltaf == 0) return ! now only support optimization for delta f
+
+call wtimer_start(global_iwt_particle_optimize)
+
+! merge not important particles
+if (particle_imerge > 0 .and. particle_imerge <= input_nmerge) then
+  if ( &
+    global_time + input_dt >= input_tmerge(particle_imerge) &
+    .and. global_irk == 2 &
+  ) then
+    ! calculate absolute value of perturbed distribution in v
+    call particle_compute_dist_pertb_abs_v
+    ! perform merging
+    call particle_merge(input_thshmerge(particle_imerge))
+    particle_imerge = particle_imerge + 1
+    flag_optimized = .true.
+  end if
+end if
+
+! throw away some not important particles
+if (particle_ithrowaway > 0 .and. particle_ithrowaway <= input_nthrowaway) then
+  if ( &
+    global_time + input_dt >= input_tthrowaway(particle_ithrowaway) &
+    .and. global_irk == 2 &
+  ) then
+    ! calculate absolute value of perturbed distribution in v
+    call particle_compute_dist_pertb_abs_v
+    ! perform throwing away
+    call particle_throwaway(input_thshthrowaway(particle_ithrowaway))
+    particle_ithrowaway = particle_ithrowaway + 1
+    flag_optimized = .true.
+  end if
+end if
+
+! split important particles
+if (particle_isplit > 0 .and. particle_isplit <= input_nsplit) then
+  if ( &
+    global_time + input_dt >= input_tsplit(particle_isplit) &
+    .and. global_irk == 2 &
+  ) then
+    ! calculate absolute value of perturbed distribution in v
+    call particle_compute_dist_pertb_abs_v
+    ! perform splitting
+    call particle_split(input_thshsplit(particle_isplit))
+    particle_isplit = particle_isplit + 1
+    flag_optimized = .true.
+  end if
+end if
+
+call wtimer_stop(global_iwt_particle_optimize)
+
+end subroutine particle_optimize
+
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!
 ! finalize PETSc objects !
 !!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine particle_final
 use pic1dp_global
-use pic1dp_input
 implicit none
 #include "finclude/petsc.h90"
 
