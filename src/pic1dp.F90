@@ -28,7 +28,7 @@ use pic1dp_output
 implicit none
 #include "finclude/petsc.h90"
 
-character(len = 25), parameter :: version = '2012-09-25 19:03:34-04:00'
+character(len = 25), parameter :: version = '2012-09-26 21:02:01-04:00'
 
 ! status of termination condition: 0: not to terminate; 1: to terminate
 PetscInt :: itermination
