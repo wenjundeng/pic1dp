@@ -385,7 +385,7 @@ class VisualApp:
         self._ax_ptcldist_v.clear()
         self._ax_ptcldist_v.set_xlabel('$v$')
         self._ax_ptcldist_v.set_ylabel('particle distribution')
-        self._ax_ptcldist_v.plot(self._data.v, ptcldist_v)
+        self._ax_ptcldist_v.plot(self._data.v_pd, ptcldist_v)
 
     def update_plot_all(self):
         """Update all plots"""

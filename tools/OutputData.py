@@ -145,7 +145,7 @@ class OutputData:
         if ispecies < self.nspecies:
             return rawdata[8 + ispecies * 6 + iptcldist]
         else:
-            ret = np.zeros((self.nv))
+            ret = np.zeros((self.nv_pd))
             for i in range(self.nspecies):
                 ret += rawdata[8 + i * 6 + iptcldist]
             return ret
