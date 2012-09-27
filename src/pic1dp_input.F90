@@ -32,7 +32,7 @@ implicit none
 PetscInt, parameter :: input_ntime_max = 900000
 
 ! maximum physical time (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_time_max = 500.0_kpr
+PetscReal, parameter :: input_time_max = 1000.0_kpr
 
 
 !!!!!!!!!!!!!!!!!!!!!!!
@@ -44,7 +44,7 @@ PetscInt, parameter :: input_linear = 0
 
 ! length in real space (normalized by electron Debye length)
 PetscReal, parameter :: &
-  input_lx = 2.0_kpr * 3.141592653589793238_kpr / 0.36_kpr
+  input_lx = 2.0_kpr * 3.141592653589793238_kpr / 0.401_kpr
 
 ! equilibrium particle velocity distribution.
 ! 0: (shifted) Maxwellian; 1: two-stream1; 2: two-stream2; 3: bump-on-tail
@@ -67,7 +67,7 @@ PetscReal, dimension(input_nspecies), parameter :: &
   input_species_charge = (/ -1.0_kpr /), &
   input_species_mass = (/ 1.0_kpr /), &
   input_species_temperature = (/ 1.0_kpr /), &
-  input_species_temperature2 = (/ 1.0_kpr /), &
+  input_species_temperature2 = (/ 0.1_kpr /), &
   input_species_density = (/ 0.9_kpr /), &
   input_species_v0 = (/ 5.0_kpr /)
 
@@ -106,7 +106,7 @@ PetscScalar, dimension(0 : input_init_nmode - 1), parameter :: &
 PetscInt, parameter :: input_deltaf = 1
 
 ! initial time step (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_dt = 0.1_kpr
+PetscReal, parameter :: input_dt = 0.05_kpr
 
 ! allocation for # of marker particles per species
 ! this is also the maximum allowed # of marker particles during simulation
@@ -125,9 +125,9 @@ PetscInt, parameter :: input_imarker = 2
 PetscReal, parameter :: input_v_max = 8.0_kpr
 
 ! # of grid points in real space
-PetscInt, parameter :: input_nx = 64
+PetscInt, parameter :: input_nx = 192
 
-! # of grid points in velocity space for output and resonant detection
+! # of grid points in velocity space for resonant detection
 PetscInt, parameter :: input_nv = 128
 
 
@@ -218,6 +218,12 @@ PetscInt, parameter :: input_verbosity = 1
 
 ! time interval between data output (normalized by 1 / omega_pe)
 PetscReal, parameter :: input_output_interval = 0.5_kpr
+
+! # of x grids for output of particle distribution
+PetscInt, parameter :: input_nx_opd = 64
+
+! # of v grids for output of particle distribution
+PetscInt, parameter :: input_nv_opd = 64
 
 contains
 

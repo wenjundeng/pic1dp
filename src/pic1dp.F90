@@ -134,7 +134,7 @@ implicit none
 
 if ( &
   global_itime >= input_ntime_max &
-  .or. global_time >= input_time_max &
+  .or. global_time + PETSC_SQRT_MACHINE_EPSILON >= input_time_max &
 ) then
   check_termination = 1
 else

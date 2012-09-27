@@ -124,12 +124,12 @@ else
       + field_arr_charge1(:) * input_species_charge(ispecies)
   end do ! ispecies = 1, input_nspecies
 
-  call wtimer_start(21)
+  call wtimer_start(global_iwt_mpiallredu)
   ! then use MPI_Allreduce to get charges of all particles in field_arr_charge1
   call MPI_Allreduce(field_arr_charge2, field_arr_charge1, input_nx, &
     MPIU_SCALAR, MPI_SUM, MPI_COMM_WORLD, global_ierr)
   CHKERRQ(global_ierr)
-  call wtimer_stop(21)
+  call wtimer_stop(global_iwt_mpiallredu)
 
   ! copy values from field_arr_charge1 to field_chargeden
   call VecGetArrayF90(field_chargeden, pc, global_ierr)
@@ -189,7 +189,7 @@ else
   dt = input_dt
 end if
 
-call wtimer_start(22)
+call wtimer_start(global_iwt_scatter)
 if (input_iptclshape == 3 .or. input_iptclshape == 4) then
   call VecScatterBegin( &
     field_vs_electric, field_electric, field_electric_seq, &
@@ -204,7 +204,7 @@ if (input_iptclshape == 3 .or. input_iptclshape == 4) then
   call VecGetArrayF90(field_electric_seq, pe, global_ierr)
   CHKERRQ(global_ierr)
 end if
-call wtimer_stop(22)
+call wtimer_stop(global_iwt_scatter)
 
 do ispecies = 1, input_nspecies
   if (input_iptclshape < 3) then

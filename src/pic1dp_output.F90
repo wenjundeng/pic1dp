@@ -39,7 +39,7 @@ implicit none
 #include "finclude/petsc.h90"
 
 PetscInt, parameter :: &
-  nintparameter = 4 + input_nmode, &
+  nintparameter = 6 + input_nmode, &
   nrealparameter = 2
 PetscInt, dimension(nintparameter) :: intbuf
 PetscReal, dimension(nrealparameter) :: realbuf
@@ -76,8 +76,10 @@ intbuf(1) = input_nspecies
 intbuf(2) = input_nmode
 intbuf(3) = input_nx
 intbuf(4) = input_nv
-do iparameter = 5, 4 + input_nmode
-  intbuf(iparameter) = input_modes(iparameter - 5)
+intbuf(5) = input_nx_opd
+intbuf(6) = input_nv_opd
+do iparameter = 7, 6 + input_nmode
+  intbuf(iparameter) = input_modes(iparameter - 7)
 end do
 call PetscViewerBinaryWriteInt(output_viewer, intbuf, nintparameter, &
   PETSC_TRUE, global_ierr)
@@ -199,16 +201,16 @@ implicit none
 #include "finclude/petsc.h90"
 
 PetscScalar, parameter :: delv_inv &
-  = (input_nv - 1) / (2.0_kpr * input_v_max)
-PetscScalar, parameter :: delx_inv = input_nx / input_lx
+  = (input_nv_opd - 1) / (2.0_kpr * input_v_max)
+PetscScalar, parameter :: delx_inv = input_nx_opd / input_lx
 
 PetscInt :: ispecies, ip, ix, iv
 PetscScalar :: sx, sv
 PetscScalar, dimension(:), pointer :: px, pv, pp, pw
-PetscScalar, dimension(0 : input_nx * input_nv - 1) :: &
+PetscScalar, dimension(0 : input_nx_opd * input_nv_opd - 1) :: &
   ptcldist_markr_xv, ptcldist_total_xv, ptcldist_pertb_xv, &
   ptcldist_markr_xv_redu, ptcldist_total_xv_redu, ptcldist_pertb_xv_redu
-PetscScalar, dimension(0 : input_nv - 1) :: &
+PetscScalar, dimension(0 : input_nv_opd - 1) :: &
   ptcldist_markr_v, ptcldist_total_v, ptcldist_pertb_v, &
   ptcldist_markr_v_redu, ptcldist_total_v_redu, ptcldist_pertb_v_redu
 
@@ -238,60 +240,60 @@ do ispecies = 1, input_nspecies
     ! if particle speed is out of v_max, ignore this particle
     if (abs(pv(ip)) >= input_v_max) cycle
 
-    sx = px(ip) / input_lx * input_nx
+    sx = px(ip) / input_lx * input_nx_opd
     ix = floor(sx)
     sx = 1.0_kpr - (sx - real(ix, kpr))
 
     sv = (pv(ip) + input_v_max) &
-      / (input_v_max * 2.0_kpr) * (input_nv - 1)
+      / (input_v_max * 2.0_kpr) * (input_nv_opd - 1)
     iv = floor(sv)
     sv = 1.0_kpr - (sv - real(iv, kpr))
 
-    ptcldist_markr_xv(iv * input_nx + ix) &
-      = ptcldist_markr_xv(iv * input_nx + ix) &
+    ptcldist_markr_xv(iv * input_nx_opd + ix) &
+      = ptcldist_markr_xv(iv * input_nx_opd + ix) &
       + sx * sv
-    ptcldist_total_xv(iv * input_nx + ix) &
-      = ptcldist_total_xv(iv * input_nx + ix) &
+    ptcldist_total_xv(iv * input_nx_opd + ix) &
+      = ptcldist_total_xv(iv * input_nx_opd + ix) &
       + sx * sv * pp(ip)
     if (input_deltaf == 1) then
-      ptcldist_pertb_xv(iv * input_nx + ix) &
-        = ptcldist_pertb_xv(iv * input_nx + ix) &
+      ptcldist_pertb_xv(iv * input_nx_opd + ix) &
+        = ptcldist_pertb_xv(iv * input_nx_opd + ix) &
         + sx * sv * pw(ip)
     end if
-    ptcldist_markr_xv((iv + 1) * input_nx + ix) &
-      = ptcldist_markr_xv((iv + 1) * input_nx + ix) &
+    ptcldist_markr_xv((iv + 1) * input_nx_opd + ix) &
+      = ptcldist_markr_xv((iv + 1) * input_nx_opd + ix) &
       + sx * (1.0_kpr - sv)
-    ptcldist_total_xv((iv + 1) * input_nx + ix) &
-      = ptcldist_total_xv((iv + 1) * input_nx + ix) &
+    ptcldist_total_xv((iv + 1) * input_nx_opd + ix) &
+      = ptcldist_total_xv((iv + 1) * input_nx_opd + ix) &
       + sx * (1.0_kpr - sv) * pp(ip)
     if (input_deltaf == 1) then
-      ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
-        = ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
+      ptcldist_pertb_xv((iv + 1) * input_nx_opd + ix) &
+        = ptcldist_pertb_xv((iv + 1) * input_nx_opd + ix) &
         + sx * (1.0_kpr - sv) * pw(ip)
     end if
     ix = ix + 1
-    if (ix > input_nx - 1) ix = 0
+    if (ix > input_nx_opd - 1) ix = 0
     sx = 1.0_kpr - sx
-    ptcldist_markr_xv(iv * input_nx + ix) &
-      = ptcldist_markr_xv(iv * input_nx + ix) &
+    ptcldist_markr_xv(iv * input_nx_opd + ix) &
+      = ptcldist_markr_xv(iv * input_nx_opd + ix) &
       + sx * sv
-    ptcldist_total_xv(iv * input_nx + ix) &
-      = ptcldist_total_xv(iv * input_nx + ix) &
+    ptcldist_total_xv(iv * input_nx_opd + ix) &
+      = ptcldist_total_xv(iv * input_nx_opd + ix) &
       + sx * sv * pp(ip)
     if (input_deltaf == 1) then
-      ptcldist_pertb_xv(iv * input_nx + ix) &
-        = ptcldist_pertb_xv(iv * input_nx + ix) &
+      ptcldist_pertb_xv(iv * input_nx_opd + ix) &
+        = ptcldist_pertb_xv(iv * input_nx_opd + ix) &
         + sx * sv * pw(ip)
     end if
-    ptcldist_markr_xv((iv + 1) * input_nx + ix) &
-      = ptcldist_markr_xv((iv + 1) * input_nx + ix) &
+    ptcldist_markr_xv((iv + 1) * input_nx_opd + ix) &
+      = ptcldist_markr_xv((iv + 1) * input_nx_opd + ix) &
       + sx * (1.0_kpr - sv)
-    ptcldist_total_xv((iv + 1) * input_nx + ix) &
-      = ptcldist_total_xv((iv + 1) * input_nx + ix) &
+    ptcldist_total_xv((iv + 1) * input_nx_opd + ix) &
+      = ptcldist_total_xv((iv + 1) * input_nx_opd + ix) &
       + sx * (1.0_kpr - sv) * pp(ip)
     if (input_deltaf == 1) then
-      ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
-        = ptcldist_pertb_xv((iv + 1) * input_nx + ix) &
+      ptcldist_pertb_xv((iv + 1) * input_nx_opd + ix) &
+        = ptcldist_pertb_xv((iv + 1) * input_nx_opd + ix) &
         + sx * (1.0_kpr - sv) * pw(ip)
     end if
 
@@ -329,28 +331,28 @@ do ispecies = 1, input_nspecies
   end if
 
   call MPI_Reduce(ptcldist_markr_xv, ptcldist_markr_xv_redu, &
-    input_nx * input_nv, MPIU_SCALAR, MPI_SUM, 0, &
+    input_nx_opd * input_nv_opd, MPIU_SCALAR, MPI_SUM, 0, &
     MPI_COMM_WORLD, global_ierr)
   CHKERRQ(global_ierr)
   call MPI_Reduce(ptcldist_total_xv, ptcldist_total_xv_redu, &
-    input_nx * input_nv, MPIU_SCALAR, MPI_SUM, 0, &
+    input_nx_opd * input_nv_opd, MPIU_SCALAR, MPI_SUM, 0, &
     MPI_COMM_WORLD, global_ierr)
   CHKERRQ(global_ierr)
   call MPI_Reduce(ptcldist_markr_v, ptcldist_markr_v_redu, &
-    input_nv, MPIU_SCALAR, MPI_SUM, 0, &
+    input_nv_opd, MPIU_SCALAR, MPI_SUM, 0, &
     MPI_COMM_WORLD, global_ierr)
   CHKERRQ(global_ierr)
   call MPI_Reduce(ptcldist_total_v, ptcldist_total_v_redu, &
-    input_nv, MPIU_SCALAR, MPI_SUM, 0, &
+    input_nv_opd, MPIU_SCALAR, MPI_SUM, 0, &
     MPI_COMM_WORLD, global_ierr)
   CHKERRQ(global_ierr)
   if (input_deltaf == 1) then
     call MPI_Reduce(ptcldist_pertb_xv, ptcldist_pertb_xv_redu, &
-      input_nx * input_nv, MPIU_SCALAR, MPI_SUM, 0, &
+      input_nx_opd * input_nv_opd, MPIU_SCALAR, MPI_SUM, 0, &
       MPI_COMM_WORLD, global_ierr)
     CHKERRQ(global_ierr)
     call MPI_Reduce(ptcldist_pertb_v, ptcldist_pertb_v_redu, &
-      input_nv, MPIU_SCALAR, MPI_SUM, 0, &
+      input_nv_opd, MPIU_SCALAR, MPI_SUM, 0, &
       MPI_COMM_WORLD, global_ierr)
     CHKERRQ(global_ierr)
   end if
@@ -368,19 +370,23 @@ do ispecies = 1, input_nspecies
     else
       do iv = 0, input_nv - 1
         ! reuse sv for velocity value
-        sv = (real(iv, kpr) / (input_nv - 1) * 2.0_kpr - 1.0_kpr) &
+        sv = (real(iv, kpr) / (input_nv_opd - 1) * 2.0_kpr - 1.0_kpr) &
           * input_v_max
         if (input_iptcldist == 1) then ! two-stream1
-          ptcldist_pertb_xv_redu(iv * input_nx : (iv + 1) * input_nx - 1) &
-            = ptcldist_total_xv_redu(iv * input_nx : (iv + 1) * input_nx - 1) &
+          ptcldist_pertb_xv_redu( &
+            iv * input_nx_opd : (iv + 1) * input_nx_opd - 1) &
+            = ptcldist_total_xv_redu( &
+            iv * input_nx_opd : (iv + 1) * input_nx_opd - 1) &
             - input_species_density(ispecies) * sv**2 * exp(-sv**2 / 2.0_kpr) &
             / sqrt(2.0_kpr * PETSC_PI)
           ptcldist_pertb_v_redu(iv) = ptcldist_total_v_redu(iv) - input_lx &
             * input_species_density(ispecies) * sv**2 * exp(-sv**2 / 2.0_kpr) &
             / sqrt(2.0_kpr * PETSC_PI)
         elseif (input_iptcldist == 2) then ! two-stream2
-          ptcldist_pertb_xv_redu(iv * input_nx : (iv + 1) * input_nx - 1) &
-            = ptcldist_total_xv_redu(iv * input_nx : (iv + 1) * input_nx - 1) &
+          ptcldist_pertb_xv_redu( &
+            iv * input_nx_opd : (iv + 1) * input_nx_opd - 1) &
+            = ptcldist_total_xv_redu( &
+            iv * input_nx_opd : (iv + 1) * input_nx_opd - 1) &
             - input_species_density(ispecies) &
             * (exp(-(sv + input_species_v0(ispecies))**2 / (2.0_kpr &
             * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
@@ -397,8 +403,10 @@ do ispecies = 1, input_nspecies
             / (sqrt(8.0_kpr * PETSC_PI) * input_species_temperature(ispecies) &
             / input_species_mass(ispecies))
         elseif (input_iptcldist == 3) then ! bump-on-tail
-          ptcldist_pertb_xv_redu(iv * input_nx : (iv + 1) * input_nx - 1) &
-            = ptcldist_total_xv_redu(iv * input_nx : (iv + 1) * input_nx - 1) &
+          ptcldist_pertb_xv_redu( &
+            iv * input_nx_opd : (iv + 1) * input_nx_opd - 1) &
+            = ptcldist_total_xv_redu( &
+            iv * input_nx_opd : (iv + 1) * input_nx_opd - 1) &
             - input_species_density(ispecies) &
             * exp(-sv**2 / (2.0_kpr &
             * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
@@ -412,51 +420,57 @@ do ispecies = 1, input_nspecies
           ptcldist_pertb_v_redu(iv) = ptcldist_total_v_redu(iv) - input_lx &
             * (input_species_density(ispecies) &
             * exp(-sv**2 / (2.0_kpr &
-            * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
+            * input_species_temperature(ispecies) &
+            / input_species_mass(ispecies))) &
             / (sqrt(2.0_kpr * PETSC_PI) * input_species_temperature(ispecies) &
             / input_species_mass(ispecies)) &
             + (1.0_kpr - input_species_density(ispecies)) &
             * exp(-(sv - input_species_v0(ispecies))**2 / (2.0_kpr &
-            * input_species_temperature2(ispecies) / input_species_mass(ispecies))) &
+            * input_species_temperature2(ispecies) &
+            / input_species_mass(ispecies))) &
             / (sqrt(2.0_kpr * PETSC_PI) * input_species_temperature2(ispecies) &
             / input_species_mass(ispecies)))
         else ! (shifted) Maxwellian
-          ptcldist_pertb_xv_redu(iv * input_nx : (iv + 1) * input_nx - 1) &
-            = ptcldist_total_xv_redu(iv * input_nx : (iv + 1) * input_nx - 1) &
+          ptcldist_pertb_xv_redu( &
+            iv * input_nx_opd : (iv + 1) * input_nx_opd - 1) &
+            = ptcldist_total_xv_redu( &
+            iv * input_nx_opd : (iv + 1) * input_nx_opd - 1) &
             - input_species_density(ispecies) &
             * exp(-(sv - input_species_v0(ispecies))**2 / (2.0_kpr &
-            * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
+            * input_species_temperature(ispecies) &
+            / input_species_mass(ispecies))) &
             / (sqrt(2.0_kpr * PETSC_PI) * input_species_temperature(ispecies) &
             / input_species_mass(ispecies))
           ptcldist_pertb_v_redu(iv) = ptcldist_total_v_redu(iv) - input_lx &
             * input_species_density(ispecies) &
             * exp(-(sv - input_species_v0(ispecies))**2 / (2.0_kpr &
-            * input_species_temperature(ispecies) / input_species_mass(ispecies))) &
+            * input_species_temperature(ispecies) &
+            / input_species_mass(ispecies))) &
             / (sqrt(2.0_kpr * PETSC_PI) * input_species_temperature(ispecies) &
             / input_species_mass(ispecies))
         end if
-      end do ! iv = 0, input_nv - 1
+      end do ! iv = 0, input_nv_opd - 1
     end if ! else of if (input_deltaf == 1)
   end if ! (global_mype == 0)
 
   ! only root MPI process will write to file
   call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_markr_xv_redu, &
-    input_nx * input_nv, PETSC_TRUE, global_ierr)
+    input_nx_opd * input_nv_opd, PETSC_TRUE, global_ierr)
   CHKERRQ(global_ierr)
   call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_total_xv_redu, &
-    input_nx * input_nv, PETSC_TRUE, global_ierr)
+    input_nx_opd * input_nv_opd, PETSC_TRUE, global_ierr)
   CHKERRQ(global_ierr)
   call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_pertb_xv_redu, &
-    input_nx * input_nv, PETSC_TRUE, global_ierr)
+    input_nx_opd * input_nv_opd, PETSC_TRUE, global_ierr)
   CHKERRQ(global_ierr)
   call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_markr_v_redu, &
-    input_nv, PETSC_TRUE, global_ierr)
+    input_nv_opd, PETSC_TRUE, global_ierr)
   CHKERRQ(global_ierr)
   call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_total_v_redu, &
-    input_nv, PETSC_TRUE, global_ierr)
+    input_nv_opd, PETSC_TRUE, global_ierr)
   CHKERRQ(global_ierr)
   call PetscViewerBinaryWriteScalar(output_viewer, ptcldist_pertb_v_redu, &
-    input_nv, PETSC_TRUE, global_ierr)
+    input_nv_opd, PETSC_TRUE, global_ierr)
   CHKERRQ(global_ierr)
 end do ! ispecies = 1, input_nspecies
 
@@ -566,50 +580,49 @@ use pic1dp_input
 implicit none
 #include "finclude/petsc.h90"
 
-character(len = 18), dimension(30) :: string_wt
+character(len = 18), dimension(4) :: string_wt
 
 if (input_verbosity == 0) return
 
 call global_pp("Info: timers:\n")
 call global_pp( &
   "            total   initialization    particle load    push particle\n")
-call wtimer_print(global_iwt_total, string_wt(global_iwt_total), &
+call wtimer_print(global_iwt_total, string_wt(1), &
   global_iwt_total, .true.)
-call wtimer_print(global_iwt_init, string_wt(global_iwt_init), &
+call wtimer_print(global_iwt_init, string_wt(2), &
   global_iwt_total, .true.)
-call wtimer_print(global_iwt_particle_load, &
-  string_wt(global_iwt_particle_load), global_iwt_total, .true.)
-call wtimer_print(global_iwt_push_particle, &
-  string_wt(global_iwt_push_particle), global_iwt_total, .true.)
-call global_pp(string_wt(global_iwt_total) // string_wt(global_iwt_init) &
-  // string_wt(global_iwt_particle_load) &
-  // string_wt(global_iwt_push_particle) // "\n")
+call wtimer_print(global_iwt_particle_load, string_wt(3), &
+  global_iwt_total, .true.)
+call wtimer_print(global_iwt_push_particle, string_wt(4), &
+  global_iwt_total, .true.)
+call global_pp(string_wt(1) // string_wt(2) &
+  // string_wt(3) // string_wt(4) // "\n")
 
 call global_pp( &
   "   particle shape   collect charge   electric field           output\n")
-call wtimer_print(global_iwt_particle_shape, &
-  string_wt(global_iwt_particle_shape), global_iwt_total, .true.)
-call wtimer_print(global_iwt_collect_charge, &
-  string_wt(global_iwt_collect_charge), global_iwt_total, .true.)
-call wtimer_print(global_iwt_field_electric, &
-  string_wt(global_iwt_field_electric), global_iwt_total, .true.)
-call wtimer_print(global_iwt_output, string_wt(global_iwt_output), &
+call wtimer_print(global_iwt_particle_shape, string_wt(1), &
   global_iwt_total, .true.)
-call global_pp(string_wt(global_iwt_particle_shape) &
-  // string_wt(global_iwt_collect_charge) &
-  // string_wt(global_iwt_field_electric) &
-  // string_wt(global_iwt_output) // "\n")
+call wtimer_print(global_iwt_collect_charge, string_wt(2), &
+  global_iwt_total, .true.)
+call wtimer_print(global_iwt_field_electric, string_wt(3), &
+  global_iwt_total, .true.)
+call wtimer_print(global_iwt_output, string_wt(4), &
+  global_iwt_total, .true.)
+call global_pp(string_wt(1) // string_wt(2) &
+  // string_wt(3) // string_wt(4) // "\n")
 
 call global_pp( &
-  "ptcl optimization     finalization                .                .\n")
-call wtimer_print(global_iwt_particle_optimize, &
-  string_wt(global_iwt_particle_optimize), global_iwt_total, .true.)
-call wtimer_print(global_iwt_final, string_wt(global_iwt_final), &
+  "ptcl optimization     finalization    MPI_Allreduce          scatter\n")
+call wtimer_print(global_iwt_particle_optimize, string_wt(1), &
   global_iwt_total, .true.)
-call global_pp(string_wt(global_iwt_particle_optimize) &
-  // string_wt(global_iwt_final) &
-  !// string_wt(21) // string_wt(22) &
-  // "\n")
+call wtimer_print(global_iwt_final, string_wt(2), &
+  global_iwt_total, .true.)
+call wtimer_print(global_iwt_mpiallredu, string_wt(3), &
+  global_iwt_total, .true.)
+call wtimer_print(global_iwt_scatter, string_wt(4), &
+  global_iwt_total, .true.)
+call global_pp(string_wt(1) // string_wt(2) &
+  // string_wt(3) // string_wt(4) // "\n")
 
 end subroutine output_wtimer
 
