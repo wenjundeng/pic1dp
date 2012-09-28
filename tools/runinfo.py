@@ -52,6 +52,10 @@ parser.add_argument('-g', \
     metavar = '<# of runs in group>', \
     help = 'get information from a group of runs', \
     nargs = '+', type = int)
+parser.add_argument('-wg', \
+    metavar = '<data file>',
+    help = 'write group results to a data file', \
+    type = str)
 parser.add_argument('-gr', \
     metavar = ('<lower bound>', '<upper bound>'), \
     help = 'time boundaries for growth rate calculation', \
@@ -87,7 +91,7 @@ for irun in range(len(args.datapaths)):
     print ': ', args.datapaths[irun]
     data.append(OutputData.OutputData(args.datapaths[irun]))
 
-    # calculate integral of energe over time
+    # calculate integral of energy over time
     scalar_t = data[irun].get_scalar_t()
     t = scalar_t[0, :]
     eng = scalar_t[1, :]
@@ -96,21 +100,20 @@ for irun in range(len(args.datapaths)):
         eng_ref = eng
 
     intengdt = intfdt(t, eng)
-    if data[irun].ntime == data[0].ntime:
-        intengdiffdt = intfdt(t_ref, np.abs(eng - eng_ref))
     if irun == 0:
         intengdt_ref = intengdt
 
-    printvalref('int energe dt =', intengdt, intengdt_ref)
+    printvalref('int energy dt =', intengdt, intengdt_ref)
 
     if data[irun].ntime == data[0].ntime:
-        print 'int |energe - energe_ref| dt =', intengdiffdt
-        print 'int |energe - energe_ref| dt / int energe_ref dt =', \
+        intengdiffdt = intfdt(t_ref, np.abs(eng - eng_ref))
+        print 'int |energy - energy_ref| dt =', intengdiffdt
+        print 'int |energy - energy_ref| dt / int energy_ref dt =', \
             intengdiffdt / intengdt_ref * 100.0, '%'
 
     # calculate growth rate
     if args.gr is not None:
-        gamma = data[irun].growthrate_energe_fit(args.gr[0], args.gr[1]) / 2.0
+        gamma = data[irun].growthrate_energy_fit(args.gr[0], args.gr[1]) / 2.0
         if irun == 0:
             if args.gref is not None:
                 gamma_ref = args.gref[0]
@@ -122,16 +125,26 @@ for irun in range(len(args.datapaths)):
 
     # calculate saturation level
     if args.sr is not None:
-        peak = data[irun].findpeak_energe(args.sr[0], args.sr[1])
+        peak = data[irun].findpeak_energy(args.sr[0], args.sr[1])
         if irun == 0:
             peak_ref = peak
-        printvalref('saturation level (energe) =', peak[1], peak_ref[1])
+        printvalref('saturation level (energy) =', peak[1], peak_ref[1])
         printvalref('saturation time =', peak[0], peak_ref[0])
         if args.g is not None:
             peak_group[irun_group, :] = peak[:]
 
     # group operation
     if args.g is not None:
+        if irun_group == 0:
+            t_group = t
+            eng_group = np.zeros((nrun_group, data[irun].ntime))
+        # end of if irun_group == 0
+        if data[irun].ntime == np.shape(eng_group)[1]:
+            eng_group[irun_group, :] = eng
+        else:
+            print 'Warning: # of time steps of ', args.datapaths[irun], \
+                'does not fit group head''s. Following energy integral would' \
+                + ' not make sense.'
         irun_group += 1
         if irun_group == nrun_group:
             # report group result
@@ -142,9 +155,25 @@ for irun in range(len(args.datapaths)):
             else:
                 print
 
+            # report group energy integral
+            eng_groupavg = np.mean(eng_group, axis = 0)
+            eng_groupstd = np.std(eng_group, axis = 0, ddof = 1)
+            intenggavgdt = intfdt(t_group, eng_groupavg)
+            intenggstddt = intfdt(t_group, eng_groupstd)
+            if igroup == 0:
+                intenggavgdt_ref = intenggavgdt
+                intenggstddt_ref = intenggstddt
+            printvalref('int energy_avg dt =', intenggavgdt, intenggavgdt_ref)
+            printvalref('int energy_std dt =', intenggstddt, intenggstddt_ref)
+            print 'int energy_std dt / int energy_avg dt =', \
+                    intenggstddt / intenggavgdt * 100.0, '%'
+
+            group_result = np.array([igroup, intenggavgdt, intenggstddt])
+
+            # report group growth rate
             if args.gr is not None:
                 gamma_groupavg = np.mean(gamma_group)
-                gamma_groupstd = np.std(gamma_group)
+                gamma_groupstd = np.std(gamma_group, ddof = 1)
                 if igroup == 0:
                     if args.gref is not None:
                         gamma_groupavg_ref = args.gref[0]
@@ -157,9 +186,12 @@ for irun in range(len(args.datapaths)):
                     gamma_groupstd_ref)
                 print 'growth rate std / average =', \
                     gamma_groupstd / gamma_groupavg * 100.0, '%'
+                group_result = np.append(group_result, \
+                    [gamma_groupavg, gamma_groupstd])
+            # report group saturation level
             if args.sr is not None:
                 peak_groupavg = np.mean(peak_group, axis = 0)
-                peak_groupstd = np.std(peak_group, axis = 0)
+                peak_groupstd = np.std(peak_group, axis = 0, ddof = 1)
                 if igroup == 0:
                     peak_groupavg_ref = peak_groupavg
                     peak_groupstd_ref = peak_groupstd
@@ -175,6 +207,14 @@ for irun in range(len(args.datapaths)):
                     peak_groupstd_ref[0])
                 print 'saturation time std / average =', \
                     peak_groupstd[0] / peak_groupavg[0] * 100.0, '%'
+                group_result = np.append(group_result, \
+                    [peak_groupavg[1], peak_groupstd[1]])
+
+            if igroup == 0:
+                group_result_all = np.array([group_result])
+            else:
+                group_result_all = np.append(group_result_all, \
+                    np.array([group_result]), axis = 0)
 
             print '****************************************'
             # move on to next group
@@ -191,4 +231,7 @@ for irun in range(len(args.datapaths)):
         # end of if irun_group = nrun_group:
     # end of if args.g is not None:
 # end of for irun in range(len(args.datapaths)):
+
+if args.wg is not None:
+    np.savetxt(args.wg, group_result_all)
 
