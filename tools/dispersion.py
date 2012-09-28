@@ -303,6 +303,7 @@ if __name__ == '__main__':
             arrk = [args.k[0]]
             arromega = [omega]
         disp.set_k(args.k[0])
+        disp.append_guess([omega * 0.95, omega * 1.05, omega])
         visdisp = VisualDispersion.VisualDispersion( \
             disp, arrk, arromega)
         plt.show()

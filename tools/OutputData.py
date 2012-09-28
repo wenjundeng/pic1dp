@@ -150,32 +150,32 @@ class OutputData:
                 ret += rawdata[8 + i * 6 + iptcldist]
             return ret
 
-    def growthrate_energe_fit(self, time1, time2):
+    def growthrate_energy_fit(self, time1, time2):
         '''calculate growth rate using data between time1 and time2'''
         scalar_t = self.get_scalar_t()
         itime1 = np.searchsorted(scalar_t[0], time1) - 1
         itime2 = np.searchsorted(scalar_t[0], time2)
         t = scalar_t[0, itime1 : itime2]
-        energe = scalar_t[1, itime1 : itime2]
+        energy = scalar_t[1, itime1 : itime2]
 
         # fit growthrate
         n = itime2 - itime1
-        lnenerge = np.log(energe)
+        lnenergy = np.log(energy)
         sum_t = np.sum(t)
-        sum_lnenerge = np.sum(lnenerge)
-        sum_tlnenerge = np.sum(t * lnenerge)
+        sum_lnenergy = np.sum(lnenergy)
+        sum_tlnenergy = np.sum(t * lnenergy)
         sum_t2 = np.sum(t * t)
-        gamma = (n * sum_tlnenerge - sum_t * sum_lnenerge) \
+        gamma = (n * sum_tlnenergy - sum_t * sum_lnenergy) \
             / (n * sum_t2 - sum_t * sum_t)
         return gamma
 
-    def findpeak_energe(self, time1, time2):
+    def findpeak_energy(self, time1, time2):
         '''find peak using data between time1 and time2'''
         scalar_t = self.get_scalar_t()
         itime1 = np.searchsorted(scalar_t[0], time1) - 1
         itime2 = np.searchsorted(scalar_t[0], time2)
         t = scalar_t[0, itime1 : itime2]
-        energe = scalar_t[1, itime1 : itime2]
-        peakindex = np.argmax(energe)
-        return [t[peakindex], energe[peakindex]]
+        energy = scalar_t[1, itime1 : itime2]
+        peakindex = np.argmax(energy)
+        return [t[peakindex], energy[peakindex]]
 
