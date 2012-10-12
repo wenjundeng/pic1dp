@@ -44,7 +44,7 @@ PetscInt, parameter :: input_linear = 0
 
 ! length in real space (normalized by electron Debye length)
 PetscReal, parameter :: &
-  input_lx = 2.0_kpr * 3.141592653589793238_kpr / 0.401_kpr
+  input_lx = 2.0_kpr * 3.1415926535897932384626_kpr / 0.401_kpr
 
 ! equilibrium particle velocity distribution.
 ! 0: (shifted) Maxwellian; 1: two-stream1; 2: two-stream2; 3: bump-on-tail
@@ -67,7 +67,7 @@ PetscReal, dimension(input_nspecies), parameter :: &
   input_species_charge = (/ -1.0_kpr /), &
   input_species_mass = (/ 1.0_kpr /), &
   input_species_temperature = (/ 1.0_kpr /), &
-  input_species_temperature2 = (/ 0.1_kpr /), &
+  input_species_temperature2 = (/ 1.0_kpr /), &
   input_species_density = (/ 0.9_kpr /), &
   input_species_v0 = (/ 5.0_kpr /)
 
@@ -159,14 +159,21 @@ PetscReal, dimension(input_nthrowaway), parameter :: &
   input_tthrowaway = (/ (50.0_kpr + global_itime * 0.5_kpr, &
     global_itime = 1, input_nthrowaway) /)
 
+! type of throwing away
+! 1: throw away based on threshold given by input_thshthrowaway
+! 2: throw away based on profile of int |delta f| dx
+PetscInt, parameter :: input_typethrowaway = 2
+
 ! list of throwing away thresholds in terms of
 ! fraction of absolute value of distribution in v
+! only useful when input_typethrowaway == 1
 PetscReal, dimension(input_nthrowaway), parameter :: &
   input_thshthrowaway = (/ &
     (0.1_kpr / max(input_nthrowaway, 1) * real(global_itime, kpr), &
     global_itime = 1, input_nthrowaway) /)
 
-! fraction of non-resonant particles to be thrown away
+! fraction of not important particles to be thrown away
+! only useful when input_typethrowaway == 1
 PetscReal, parameter :: input_throwaway_frac = 0.9_kpr
 
 ! # of times of splitting particles

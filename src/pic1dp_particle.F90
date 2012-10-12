@@ -575,14 +575,16 @@ do ispecies = 1, input_nspecies
       df = particle_dist_pertb_abs_v(ispecies, iv) * sv &
         + particle_dist_pertb_abs_v(ispecies, iv + 1) * (1.0_kpr - sv)
     end if ! else of if (iv < 0) elseif (iv > input_nv - 1)
-    ! ignore important particle
-    if (df >= df_thsh) cycle
+    if (input_typethrowaway == 1) then
+      ! ignore important particle
+      if (df >= df_thsh) cycle
+    end if
 
     df = df / maxval(particle_dist_pertb_abs_v(ispecies, :))
     call random_number(dice)
 
-    if (dice < input_throwaway_frac) then
-    !if (dice > df) then
+    if ((input_typethrowaway == 1 .and. dice < input_throwaway_frac) &
+      .or. (input_typethrowaway == 2 .and. dice > df)) then
       ! throw away particle, and move the last particle to current index
       if (ip < particle_np(ispecies)) then
         px(ip) = px(particle_np(ispecies))
@@ -594,11 +596,14 @@ do ispecies = 1, input_nspecies
       particle_np(ispecies) = particle_np(ispecies) - 1
     else
       ! keep particle, but scale up weight
-      pp(ip) = pp(ip) / (1.0_kpr - input_throwaway_frac)
-      pw(ip) = pw(ip) / (1.0_kpr - input_throwaway_frac)
-      !pp(ip) = pp(ip) / df
-      !pw(ip) = pw(ip) / df
-    end if ! else of if (dice > df)
+      if (input_typethrowaway == 1) then
+        pp(ip) = pp(ip) / (1.0_kpr - input_throwaway_frac)
+        pw(ip) = pw(ip) / (1.0_kpr - input_throwaway_frac)
+      else
+        pp(ip) = pp(ip) / df
+        pw(ip) = pw(ip) / df
+      end if
+    end if
   end do ! ip = 1, particle_np(ispecies)
 
   call VecRestoreArrayF90(particle_x(ispecies), px, global_ierr)
