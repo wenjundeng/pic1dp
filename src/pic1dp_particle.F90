@@ -309,7 +309,7 @@ do ispecies = 1, input_nspecies
     if (px(ip) < 0.0_kpr) px(ip) = px(ip) + input_lx
 
     sx = px(ip) / input_lx * input_nx
-    ix1 = floor(sx)
+    ix1 = floor(sx, kpi)
     sx = sx - real(ix1, kpr)
     if (input_iptclshape <= 2) then
       ix2 = ix1 + 1
@@ -379,7 +379,7 @@ do ispecies = 1, input_nspecies
 
     sv = (pv(ip) + input_v_max) &
       / (input_v_max * 2.0_kpr) * (input_nv - 1)
-    iv = floor(sv)
+    iv = floor(sv, kpi)
     sv = 1.0_kpr - (sv - real(iv, kpr))
 
     dist_pertb_abs_v(iv) = dist_pertb_abs_v(iv) + sv * abs(pw(ip))
@@ -448,7 +448,7 @@ do ispecies = 1, input_nspecies
     !if (abs(pv(ip)) >= input_v_max) cycle
 
     sv = (pv(ip) + input_v_max) / (input_v_max * 2.0_kpr) * (input_nv - 1)
-    iv = floor(sv)
+    iv = floor(sv, kpi)
     if (iv < 0) then
       iv = 0
       sv = 1.0_kpr
@@ -471,7 +471,7 @@ do ispecies = 1, input_nspecies
     if (px(ip) < 0.0_kpr) px(ip) = px(ip) + input_lx
 
     sx = px(ip) / input_lx * input_nx
-    ix = floor(sx)
+    ix = floor(sx, kpi)
     if (pw(ip) > 0.0_kpr) then
       iw = 2
     else
@@ -563,7 +563,7 @@ do ispecies = 1, input_nspecies
     !if (abs(pv(ip)) >= input_v_max) cycle
 
     sv = (pv(ip) + input_v_max) / (input_v_max * 2.0_kpr) * (input_nv - 1)
-    iv = floor(sv)
+    iv = floor(sv, kpi)
     if (iv < 0) then
       iv = 0
       sv = 1.0_kpr
@@ -583,7 +583,11 @@ do ispecies = 1, input_nspecies
     end if
 
     df = df / maxval(particle_dist_pertb_abs_v(ispecies, :))
-    dice = multirand_real()
+    if (kpr == mrkr32) then
+      dice = multirand_real32()
+    else
+      dice = multirand_real64()
+    end if
 
     if ((input_typethrowaway == 1 .and. dice < input_throwaway_frac) &
       .or. (input_typethrowaway == 2 .and. dice > df)) then
@@ -671,7 +675,7 @@ do ispecies = 1, input_nspecies
     !if (abs(pv(ip)) >= input_v_max) cycle
 
     sv = (pv(ip) + input_v_max) / (input_v_max * 2.0_kpr) * (input_nv - 1)
-    iv = floor(sv)
+    iv = floor(sv, kpi)
     if (iv < 0) then
       iv = 0
       sv = 1.0_kpr

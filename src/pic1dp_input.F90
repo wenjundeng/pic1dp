@@ -32,7 +32,7 @@ implicit none
 PetscInt, parameter :: input_ntime_max = 900000
 
 ! maximum physical time (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_time_max = 1000.0_kpr
+PetscReal, parameter :: input_time_max = 500.0_kpr
 
 
 !!!!!!!!!!!!!!!!!!!!!!!
@@ -44,7 +44,7 @@ PetscInt, parameter :: input_linear = 0
 
 ! length in real space (normalized by electron Debye length)
 PetscReal, parameter :: &
-  input_lx = 2.0_kpr * 3.1415926535897932384626_kpr / 0.401_kpr
+  input_lx = 2.0_kpr * 3.1415926535897932384626_kpr / 0.36_kpr
 
 ! equilibrium particle velocity distribution.
 ! 0: (shifted) Maxwellian; 1: two-stream1; 2: two-stream2; 3: bump-on-tail
@@ -130,6 +130,13 @@ PetscInt, parameter :: input_nx = 192
 ! # of grid points in velocity space for resonant detection
 PetscInt, parameter :: input_nv = 128
 
+! particle shape calculation
+! 1: use PETSc matrix for shape matrix, destroy and re-create matrix every time
+! 2: use PETSc matrix for shape matrix, use MatZeroEntries to reset matrix
+! 3: use regular array for shape matrix
+! 4: calculate shape function as needed, no matrix
+PetscInt, parameter :: input_iptclshape = 4
+
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! marker particle optimizations !
@@ -198,13 +205,6 @@ PetscInt, parameter :: input_split_ngroup = 5
 ! variation of change in v in terms of fraction of grid size
 PetscReal, parameter :: input_split_dv_sig_frac = 0.1_kpr
 
-! particle shape calculation
-! 1: use PETSc matrix for shape matrix, destroy and re-create matrix every time
-! 2: use PETSc matrix for shape matrix, use MatZeroEntries to reset matrix
-! 3: use regular array for shape matrix
-! 4: calculate shape function as needed, no matrix
-PetscInt, parameter :: input_iptclshape = 4
-
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! random number generator (multirand) parameters !
@@ -258,6 +258,7 @@ contains
 ! initial perturbation shpae in velocity space !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 PetscScalar function input_pertb_shape(v, ispecies)
+!use multirand
 implicit none
 PetscScalar, intent(in) :: v
 PetscInt, intent(in) :: ispecies
@@ -270,8 +271,7 @@ input_pertb_shape = 1.0_kpr
 ! below are other testing shapes !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! random noise
-!call random_number(input_pertb_shape)
-!input_pertb_shape = input_pertb_shape - 0.5
+!input_pertb_shape = multirand_real64() - 0.5_kpr
 
 !input_pertb_shape = v**30 * exp(-v * v) * 1e-8_kpr
 

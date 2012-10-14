@@ -25,9 +25,10 @@ implicit none
 ! get the kind # of PetscReal !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! a real constant to test the kind # of PetscReal
-PetscReal, parameter :: testkindPetscReal = 0d0 
+PetscReal, parameter :: testkindPetscReal = 0d0
 ! kind # of PetscReal
 PetscInt, parameter :: kpr = kind(testkindPetscReal)
+PetscInt, parameter :: kpi = kind(kpr)
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

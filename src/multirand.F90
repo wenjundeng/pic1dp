@@ -18,52 +18,92 @@
 
 ! a 64-bit puedo-random number generator with multiple choices of algorithms
 !   and multiple choices of distributions
+! (interfaces for 32-bit random numbers are also provided)
+! (32-bit interfaces are not fully tested yet)
 ! this module uses some Fortran 2003 features, make sure that your compiler
-!   supports Fortran 2003 standard
+!   supports Fortran 2003 standard (GNU Fortran 4.6 suffices)
+! usage:
+!   use multirand_init(...) to initialize multirand
+!   then you can use these functions to generate a single random number:
+!     multirand_int64(), multirand_int32(),
+!     multirand_real64(), multirand_real32(),
+!     multirand_gaussian64(), multirand_gaussian32()
+!   you can use these subroutines to fill an array with random numbers:
+!     multirand_int_array64(array), multirand_int_array32(array),
+!     multirand_real_array64(array), multirand_real_array32(array),
+!     multirand_gaussian_array64(array), multirand_gaussian_array32(array)
+!   you can also use these generic interfaces for arrays:
+!     multirand_int_array(array),
+!     multirand_real_array(array),
+!     multirand_gaussian_array(array)
 module multirand
 implicit none
 
-! kind number used in this module
+! macros for random integer to [0, 1] real conversion
+#define INT2REAL64(i) i / multirand_maxu64 + 0.5_mrkr64
+#define INT2REAL32(i) i / multirand_maxu32 + 0.5_mrkr32
+
+! macros for extracting two 32-bit integers from a 64-bit integer
+! 4294967295 = 0xFFFFFFFF
+#define INT64TO32_1(i) iand(i, 4294967295_mrki64)
+#define INT64TO32_2(i) ishft(i, -32)
+
+! kind numbers used in this module
 ! 64-bit integers and real numbers
-integer, parameter :: i64 = selected_int_kind(10)
-integer, parameter :: r64 = selected_real_kind(10)
+integer, parameter :: mrki64 = selected_int_kind(10)
+integer, parameter :: mrkr64 = selected_real_kind(10)
 ! 32-bit integers and real numbers
-integer, parameter :: i32 = selected_int_kind(5)
-integer, parameter :: r32 = selected_real_kind(5)
+integer, parameter :: mrki32 = selected_int_kind(5)
+integer, parameter :: mrkr32 = selected_real_kind(5)
 
 ! real number of 2**63-1, the maximum value for signed 64-bit integer
-real(kind = r64), parameter :: multirand_max64 = 9223372036854775807.0_r64
+real(kind = mrkr64), parameter :: multirand_max64 = 9223372036854775807.0_mrkr64
 ! real number of 2**64-1, the maximum value for unsigned 64-bit integer
-real(kind = r64), parameter :: multirand_maxu64 = 18446744073709551615.0_r64
+real(kind = mrkr64), parameter :: multirand_maxu64 = 18446744073709551615.0_mrkr64
 
 ! real number of 2**31-1, the maximum value for signed 32-bit integer
-real(kind = r32), parameter :: multirand_max32 = 2147483647.0_r32
+real(kind = mrkr32), parameter :: multirand_max32 = 2147483647.0_mrkr32
 ! real number of 2**32-1, the maximum value for unsigned 32-bit integer
-real(kind = r32), parameter :: multirand_maxu32 = 4294967295.0_r32
+real(kind = mrkr32), parameter :: multirand_maxu32 = 4294967295.0_mrkr32
 ! max # of seeds needed for all algorithms
 integer, parameter :: multirand_nseed = 312
 
-! # of algorithms for generating random integers
-!integer, parameter :: multirand_nal_int = 2
-
-! # of seeds for each algorithm
-!integer, dimension(multirand_nal_int), parameter :: &
-!  multirand_nseed = (/ 4, 312 /)
-
-! multirand_int is a wrapper for uniform random integer generation
+! multirand_int64 is a wrapper for 64-bit uniform random integer generation
 ! choose different generation algorithms using al_int argument 
 !   of multirand_init()
-procedure(multirand_kiss), pointer :: multirand_int => multirand_kiss
+procedure(multirand_kiss), pointer :: multirand_int64 => null()
 
 ! seeds
-integer(kind = i64), dimension(0 : multirand_nseed - 1) :: multirand_seeds
+integer(kind = mrki64), dimension(0 : multirand_nseed - 1) :: multirand_seeds
 
 ! seed index
 integer :: multirand_iseed
 
+! 32-bit random integer buffer
+integer(kind = mrki64) :: multirand_int32buf
+logical :: multirand_int32buf_filled = .false.
+
 ! Gaussian random number buffer
-real(kind = r64) :: multirand_gbuf
-logical :: multirand_gbuf_filled = .false.
+real(kind = mrkr64) :: multirand_gaussian64buf
+logical :: multirand_gaussian64buf_filled = .false.
+real(kind = mrkr32) :: multirand_gaussian32buf
+logical :: multirand_gaussian32buf_filled = .false.
+
+! generic interfaces for filling an array with random numbers
+interface multirand_int_array
+  module procedure multirand_int_array64
+  module procedure multirand_int_array32
+end interface
+
+interface multirand_real_array
+  module procedure multirand_real_array64
+  module procedure multirand_real_array32
+end interface
+
+interface multirand_gaussian_array
+  module procedure multirand_gaussian_array64
+  module procedure multirand_gaussian_array32
+end interface
 
 contains
 
@@ -74,8 +114,8 @@ subroutine multirand_init(al_int, seed_type, mype, warmup, selftest)
 implicit none
 
 ! specify algorithm for generating uniform random integers
-! 1: George Marsaglia's 64-bit KISS
-! 2: 64-bit Mersenne Twister 19937
+! 1: George Marsaglia's 64-bit KISS (period ~ 2**(247.42) ~ 10**(74.48))
+! 2: 64-bit Mersenne Twister 19937 (period = 2**19937 - 1 ~ 10**6002)
 ! (more to be implemented)
 integer, intent(in), optional :: al_int
 
@@ -100,7 +140,7 @@ integer, intent(in), optional :: warmup
 logical, intent(in), optional :: selftest
 
 integer, parameter :: nprime = 100
-integer(kind = i64), dimension(0 : nprime - 1), parameter :: &
+integer(kind = mrki64), dimension(0 : nprime - 1), parameter :: &
   primes1 = (/ &
     15484219, 15484223, 15484243, 15484247, 15484279, &
     15484333, 15484363, 15484387, 15484393, 15484409, &
@@ -136,15 +176,19 @@ integer(kind = i64), dimension(0 : nprime - 1), parameter :: &
 integer, parameter :: furandom = 89
 
 integer :: seed_type_act, warmup_act, flag
-integer(kind = i64) :: clock, iseed, nseed
-integer(kind = i64), dimension(0 : multirand_nseed - 1) :: tmpseeds
+integer(kind = mrki64) :: clock, iseed, nseed
+integer(kind = mrki64), dimension(0 : multirand_nseed - 1) :: tmpseeds
 logical :: selftest_act, exist_urandom
 character(len = 20) :: msg, msg2
 
 if (present(al_int)) then
-  if (al_int == 2) multirand_int => multirand_mt19937
+  if (al_int == 2) then
+    multirand_int64 => multirand_mt19937
+  else
+    multirand_int64 => multirand_kiss
+  end if
 end if
-if (associated(multirand_int, multirand_kiss)) then
+if (associated(multirand_int64, multirand_kiss)) then
   nseed = 4
 else ! implying multirand_mt19937
   nseed = 312
@@ -198,7 +242,7 @@ end if
 if (seed_type_act == 3) then
   read (furandom) multirand_seeds(0 : nseed - 1)
   ! make corrections to satisfy certain seed requirements
-  if (associated(multirand_int, multirand_kiss)) then
+  if (associated(multirand_int64, multirand_kiss)) then
     do while (multirand_seeds(1) == 0)
       read (furandom) multirand_seeds(1)
     end do
@@ -228,11 +272,14 @@ else
     ) * iseed
   end do
   ! then use KISS to randomize seeds
-  do iseed = 0, nseed - 1
+  do iseed = 1, 20 ! warm up KISS generator
+    tmpseeds(0) = multirand_kiss()
+  end do
+  do iseed = 1, nseed - 1
     tmpseeds(iseed) = multirand_kiss()
   end do
   ! make corrections to satisfy certain seed requirements
-  if (associated(multirand_int, multirand_kiss)) then
+  if (associated(multirand_int64, multirand_kiss)) then
     do while (tmpseeds(1) == 0)
       tmpseeds(1) = multirand_kiss()
     end do
@@ -244,20 +291,20 @@ else
   multirand_seeds = tmpseeds
 end if ! else of if (seed_type_act == 3)
 
-! warm up generator
+if (selftest_act) then
+  write (*, '(3a, 5z17)') trim(adjustl(msg)), '[multirand_init] Info: ', &
+    'first 5 seeds:', multirand_seeds(0 : 4)
+end if
+
+! warm up the generator
 if (present(warmup)) then
   warmup_act = warmup
 else
   warmup_act = 5
 end if
 do iseed = 1, warmup_act * multirand_nseed
-  flag = multirand_int()
+  flag = multirand_int64()
 end do
-
-if (selftest_act) then
-  write (*, '(3a, 5z17)') trim(adjustl(msg)), '[multirand_init] Info: ', &
-    'first 5 seeds:', multirand_seeds(0 : 4)
-end if
 
 end subroutine multirand_init
 
@@ -272,22 +319,22 @@ implicit none
 integer, intent(in), optional :: mype
 
 integer, parameter :: ntest = 10
-integer(kind = i64), dimension(ntest), target :: test_kiss = (/ &
-  8932985056925012148_i64,  5710300428094272059_i64, &
-  -104233206776033023_i64, -4143107803135683366_i64, &
-   542381058189297533_i64, -4244931820854714191_i64, &
-  6853720724624422285_i64,  -767542866500872268_i64, &
-  -257204313086867125_i64,  8128797625455304420_i64 /), &
+integer(kind = mrki64), dimension(ntest), target :: test_kiss = (/ &
+  8932985056925012148_mrki64,  5710300428094272059_mrki64, &
+  -104233206776033023_mrki64, -4143107803135683366_mrki64, &
+   542381058189297533_mrki64, -4244931820854714191_mrki64, &
+  6853720724624422285_mrki64,  -767542866500872268_mrki64, &
+  -257204313086867125_mrki64,  8128797625455304420_mrki64 /), &
 test_mt19937 = (/ &
- -3932459287431434586_i64, 4620546740167642908_i64, &
- -5337173792191653896_i64, -983805426561117294_i64, &
-   355488278567739596_i64, 7469126240319926998_i64, &
-  4635995468481642529_i64,  418970542659199878_i64, &
- -8842573084457035060_i64, 6358044926049913402_i64 /)
+ -3932459287431434586_mrki64, 4620546740167642908_mrki64, &
+ -5337173792191653896_mrki64, -983805426561117294_mrki64, &
+   355488278567739596_mrki64, 7469126240319926998_mrki64, &
+  4635995468481642529_mrki64,  418970542659199878_mrki64, &
+ -8842573084457035060_mrki64, 6358044926049913402_mrki64 /)
 
-integer(kind =i64), dimension(:), pointer :: ptest
-integer(kind = i64) :: i, x
-real(kind = r64) :: r
+integer(kind = mrki64), dimension(:), pointer :: ptest
+integer(kind = mrki64) :: i, x
+real(kind = mrkr64) :: r
 character(len = 20) :: msg, msg2
 logical :: match
 
@@ -299,41 +346,44 @@ else
 end if
 
 i = huge(i)
-if (i /= 9223372036854775807_i64) then
+if (i /= 9223372036854775807_mrki64) then
   write (*, '(3a)') trim(adjustl(msg)), '[multirand_selftest] Warning: ', &
     'largest integer is not 2**63-1; multirand is not working correctly.'
 end if
-r = i / multirand_maxu64 + 0.5_r64
-if (r > 1.0_r64) then
+r = i / multirand_maxu64 + 0.5_mrkr64
+if (r > 1.0_mrkr64) then
   write (*, '(3a)') trim(adjustl(msg)), '[multirand_selftest] Warning: ', &
     '[0, 1] real random number upper boundary is larger than 1.0.'
-elseif (r < 1.0_r64) then
+elseif (r < 1.0_mrkr64) then
   write (*, '(3a)') trim(adjustl(msg)), '[multirand_selftest] Warning: ', &
     '[0, 1] real random number upper boundary is smaller than 1.0.'
 end if
 i = i + 1
-if (i /= -9223372036854775807_i64 - 1_i64) then
+if (i /= -9223372036854775807_mrki64 - 1_mrki64) then
   write (*, '(3a)') trim(adjustl(msg)), '[multirand_selftest] Warning: ', &
     'smallest integer is not -2**63; multirand is not working correctly.'
 end if
-r = i / multirand_maxu64 + 0.5_r64
-if (r < 0.0_r64) then
+r = i / multirand_maxu64 + 0.5_mrkr64
+if (r < 0.0_mrkr64) then
   write (*, *) 'r = ', r
   write (*, '(3a)') trim(adjustl(msg)), '[multirand_selftest] Warning: ', &
     '[0, 1] real random number lower boundary is smaller than 0.0.'
-elseif (r > 0.0_r64) then
+elseif (r > 0.0_mrkr64) then
   write (*, '(3a)') trim(adjustl(msg)), '[multirand_selftest] Warning: ', &
     '[0, 1] real random number lower boundary is larger than 0.0.'
 end if
 
+! pending to add test of 32-bit numbers
+
 ! test default seeds
-if (associated(multirand_int, multirand_kiss)) then
-  multirand_seeds(0 : 3) = (/ 1234567890987654321_i64, &
-    362436362436362436_i64, 1066149217761810_i64, 123456123456123456_i64/)
+if (associated(multirand_int64, multirand_kiss)) then
+  multirand_seeds(0 : 3) = (/ 1234567890987654321_mrki64, &
+    362436362436362436_mrki64, 1066149217761810_mrki64, 123456123456123456_mrki64/)
   ptest => test_kiss
 else ! implying multirand_mt19937
+  multirand_seeds(0) = 5489_mrki64
   do i = 1, 312 - 1
-    multirand_seeds(i) = 6364136223846793005_i64 &
+    multirand_seeds(i) = 6364136223846793005_mrki64 &
       * ieor(multirand_seeds(i - 1), ishft(multirand_seeds(i - 1), -62)) &
       + i
   end do
@@ -341,7 +391,10 @@ else ! implying multirand_mt19937
 end if
 match = .true.
 do i = 1, ntest
-  if (multirand_int() /= ptest(i)) then
+!  x = multirand_int64()
+!  if (x /= ptest(i)) then
+!    write (*, *) x, ptest(i)
+  if (multirand_int64() /= ptest(i)) then
     match = .false.
     exit
   end if
@@ -354,75 +407,138 @@ end if
 end subroutine multirand_selftest
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! generate uniform integer random numbers to fill an array !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine multirand_int_array(array)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! generate 32-bit uniform random integer !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+integer(kind = mrki32) function multirand_int32()
+implicit none
+integer(kind = mrki64) :: irand64
+
+if (multirand_int32buf_filled) then
+  multirand_int32 = multirand_int32buf
+  multirand_int32buf_filled = .false.
+  return
+end if
+irand64 = multirand_int64()
+multirand_int32 = INT64TO32_1(irand64)
+multirand_int32buf = INT64TO32_2(irand64)
+multirand_int32buf_filled = .true.
+end function multirand_int32
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! generate uniform random integers to fill an array !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine multirand_int_array64(array)
 implicit none
 
 ! array to fill in random numbers
-integer(kind = i64), dimension(:), intent(out) :: array
+integer(kind = mrki64), dimension(:), intent(out) :: array
 
-integer(kind = i64) :: iarray
+integer(kind = mrki64) :: iarray
 
-do iarray = 1, size(array, kind = i64)
-  array(iarray) = multirand_int()
+do iarray = 1, size(array, kind = mrki64)
+  array(iarray) = multirand_int64()
 end do
-end subroutine multirand_int_array
+end subroutine multirand_int_array64
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! generate a uniform [0, 1] real random number !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-real(kind = r64) function multirand_real()
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! generate 32-bit uniform random integers to fill an array !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine multirand_int_array32(array)
 implicit none
-multirand_real = multirand_int() / multirand_maxu64 + 0.5_r64
-! uncomment the following two lines to avoid overflow/underflow
-!   due to round-off error
-! if (multirand_real > 1.0_r64) multirand_real = 1.0_r64
-! if (multirand_real < 0.0_r64) multirand_real = 0.0_r64
-! doing this boundary check may sacrifice about 7% efficiency
-! use multirand_selftest() to test if overflow/underflow may occur
-end function multirand_real
+
+! array to fill in random numbers
+integer(kind = mrkr32), dimension(:), intent(out) :: array
+
+integer(kind = mrki64) :: iarray, iarray_low, iarray_high, irand64
+
+iarray_low = 1
+iarray_high = size(array, kind = mrki64)
+if (multirand_int32buf_filled) then
+  array(iarray_low) = multirand_int32buf
+  multirand_int32buf_filled = .false.
+  iarray_low = iarray_low + 1
+end if
+do iarray = iarray_low, iarray_high, 2
+  irand64 = multirand_int64()
+  array(iarray) = INT64TO32_1(irand64)
+  if (iarray < iarray_high) then
+    array(iarray + 1) = INT64TO32_2(irand64)
+  else
+    multirand_int32buf = INT64TO32_2(irand64)
+    multirand_int32buf_filled = .true.
+  end if
+end do
+end subroutine multirand_int_array32
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! generate a uniform [0, 1] real random number     !
+! use multirand_selftest() for safe boundary check !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+real(kind = mrkr64) function multirand_real64()
+implicit none
+multirand_real64 = INT2REAL64(multirand_int64())
+end function multirand_real64
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! generate a 32-bit uniform [0, 1] real random number !
+! use multirand_selftest() for safe boundary check    !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+real(kind = mrkr32) function multirand_real32()
+implicit none
+multirand_real32 = INT2REAL32(multirand_int32())
+end function multirand_real32
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! generate uniform [0, 1] real random numbers to fill an array !
+! use multirand_selftest() for safe boundary check             !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine multirand_real_array(array)
+subroutine multirand_real_array64(array)
 implicit none
 
 ! array to fill in random numbers
-real(kind = r64), dimension(:), intent(out) :: array
+real(kind = mrkr64), dimension(:), intent(out) :: array
 
-integer(kind = i64) :: iarray
+integer(kind = mrki64) :: iarray
 
-do iarray = 1, size(array, kind = i64)
-  array(iarray) = multirand_real()
+do iarray = 1, size(array, kind = mrki64)
+  array(iarray) = INT2REAL64(multirand_int64())
 end do
-end subroutine multirand_real_array
+end subroutine multirand_real_array64
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! generate uniform [0, 1] 32-bit real random numbers to fill an array !
+! use multirand_selftest() for safe boundary check             !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine multirand_real_array32(array)
 implicit none
 
 ! array to fill in random numbers
-real(kind = r32), dimension(:), intent(out) :: array
+real(kind = mrkr32), dimension(:), intent(out) :: array
 
-integer(kind = i64) :: iarray, iarray_high, irand
-integer(kind = i32) :: irand32_1, irand32_2
+integer(kind = mrki64) :: iarray, iarray_low, iarray_high, irand64
 
-iarray_high = size(array, kind = i64)
-do iarray = 1, iarray_high, 2
-  irand = multirand_int()
-  irand32_1 = iand(irand, 4294967295_i64) ! 4294967295 = 0xFFFFFFFF
-  array(iarray) = irand32_1 / multirand_maxu32 + 0.5_r32
+iarray_low = 1
+iarray_high = size(array, kind = mrki64)
+if (multirand_int32buf_filled) then
+  array(iarray_low) = INT2REAL32(multirand_int32buf)
+  multirand_int32buf_filled = .false.
+  iarray_low = iarray_low + 1
+end if
+do iarray = iarray_low, iarray_high, 2
+  irand64 = multirand_int64()
+  array(iarray) = INT2REAL32(INT64TO32_1(irand64))
   if (iarray < iarray_high) then
-    irand32_2 = ishft(irand, -32)
-    array(iarray + 1) = irand32_2 / multirand_maxu32 + 0.5_r32
+    array(iarray + 1) = INT2REAL32(INT64TO32_2(irand64))
+  else
+    multirand_int32buf = INT64TO32_2(irand64)
+    multirand_int32buf_filled = .true.
   end if
 end do
 end subroutine multirand_real_array32
@@ -431,67 +547,93 @@ end subroutine multirand_real_array32
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! standard Gaussian random number using George Marsaglia's polar method !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-real(kind = r64) function multirand_gaussian()
+real(kind = mrkr64) function multirand_gaussian64()
 implicit none
 
-real(kind = r64) :: x, y, w
-if (multirand_gbuf_filled) then
-  multirand_gaussian = multirand_gbuf
-  multirand_gbuf_filled = .false.
+real(kind = mrkr64) :: x, y, w
+if (multirand_gaussian64buf_filled) then
+  multirand_gaussian64 = multirand_gaussian64buf
+  multirand_gaussian64buf_filled = .false.
   return
 end if
 do
-  x = multirand_int() / multirand_max64
-  y = multirand_int() / multirand_max64
+  x = multirand_int64() / multirand_max64
+  y = multirand_int64() / multirand_max64
   w = x * x + y * y
-  if (w > 0.0_r64 .and. w < 1.0_r64) exit
+  if (w > 0.0_mrkr64 .and. w < 1.0_mrkr64) exit
 end do
-w = sqrt((-2.0_r64 * log(w)) / w)
-multirand_gaussian = w * x
-multirand_gbuf = w * y
-multirand_gbuf_filled = .true.
-end function multirand_gaussian
+w = sqrt((-2.0_mrkr64 * log(w)) / w)
+multirand_gaussian64 = w * x
+multirand_gaussian64buf = w * y
+multirand_gaussian64buf_filled = .true.
+end function multirand_gaussian64
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! 32-bit standard Gaussian random number !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+real(kind = mrkr32) function multirand_gaussian32()
+implicit none
+
+integer(kind = mrki64) :: irand64
+real(kind = mrkr32) :: x, y, w
+if (multirand_gaussian32buf_filled) then
+  multirand_gaussian32 = multirand_gaussian32buf
+  multirand_gaussian32buf_filled = .false.
+  return
+end if
+do
+  irand64 = multirand_int64()
+  x = INT64TO32_1(irand64) / multirand_max32
+  y = INT64TO32_2(irand64) / multirand_max32
+  w = x * x + y * y
+  if (w > 0.0_mrkr32 .and. w < 1.0_mrkr32) exit
+end do
+w = sqrt((-2.0_mrkr32 * log(w)) / w)
+multirand_gaussian32 = w * x
+multirand_gaussian32buf = w * y
+multirand_gaussian32buf_filled = .true.
+end function multirand_gaussian32
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! fill an array with standard Gaussian random numbers !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine multirand_gaussian_array(array)
+subroutine multirand_gaussian_array64(array)
 implicit none
 
-! optional array to fill in random numbers
-! if omitted, then generate one random number and return
-real(kind = r64), dimension(:), intent(out) :: array
+! array to fill in random numbers
+real(kind = mrkr64), dimension(:), intent(out) :: array
 
-integer(kind = i64) :: iarray_low, iarray_high, iarray
-real(kind = r64) :: x, y, w
+integer(kind = mrki64) :: iarray_low, iarray_high, iarray
+real(kind = mrkr64) :: x, y, w
 
 iarray_low = 1
-iarray_high = size(array, kind = i64)
+iarray_high = size(array, kind = mrki64)
 
-if (multirand_gbuf_filled) then
-  array(iarray_low) = multirand_gbuf
+if (multirand_gaussian64buf_filled) then
+  array(iarray_low) = multirand_gaussian64buf
   iarray_low = iarray_low + 1
-  multirand_gbuf_filled = .false.
+  multirand_gaussian64buf_filled = .false.
 end if
 do iarray = iarray_low, iarray_high, 2
   do
-    x = multirand_int() / multirand_max64
-    y = multirand_int() / multirand_max64
+    x = multirand_int64() / multirand_max64
+    y = multirand_int64() / multirand_max64
     w = x * x + y * y
-    if (w > 0.0_r64 .and. w < 1.0_r64) exit
+    if (w > 0.0_mrkr64 .and. w < 1.0_mrkr64) exit
   end do
-  w = sqrt((-2.0_r64 * log(w)) / w)
+  w = sqrt((-2.0_mrkr64 * log(w)) / w)
   array(iarray) = x * w
   if (iarray < iarray_high) then
     array(iarray + 1) = y * w
   else
-    multirand_gbuf = y * w
-    multirand_gbuf_filled = .true.
+    multirand_gaussian64buf = y * w
+    multirand_gaussian64buf_filled = .true.
   end if
 end do
 
-end subroutine multirand_gaussian_array
+end subroutine multirand_gaussian_array64
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -500,33 +642,35 @@ end subroutine multirand_gaussian_array
 subroutine multirand_gaussian_array32(array)
 implicit none
 
-! optional array to fill in random numbers
-! if omitted, then generate one random number and return
-real(kind = r32), dimension(:), intent(out) :: array
+! array to fill in random numbers
+real(kind = mrkr32), dimension(:), intent(out) :: array
 
-integer(kind = i64) :: iarray_low, iarray_high, iarray, i
-real(kind = r32) :: x, y, w
+integer(kind = mrki64) :: iarray_low, iarray_high, iarray, irand64
+real(kind = mrkr32) :: x, y, w
 
 iarray_low = 1
-iarray_high = size(array, kind = i64)
+iarray_high = size(array, kind = mrki64)
 
-if (multirand_gbuf_filled) then
-  array(iarray_low) = multirand_gbuf
+if (multirand_gaussian32buf_filled) then
+  array(iarray_low) = multirand_gaussian32buf
   iarray_low = iarray_low + 1
-  multirand_gbuf_filled = .false.
+  multirand_gaussian32buf_filled = .false.
 end if
 do iarray = iarray_low, iarray_high, 2
   do
-    i = multirand_int()
-    x = iand(i, 4294967295_i64) / multirand_max32
-    y = ishft(i, -32) / multirand_max32
+    irand64 = multirand_int64()
+    x = INT64TO32_1(irand64) / multirand_max32
+    y = INT64TO32_2(irand64) / multirand_max32
     w = x * x + y * y
-    if (w > 0.0_r32 .and. w < 1.0_r32) exit
+    if (w > 0.0_mrkr32 .and. w < 1.0_mrkr32) exit
   end do
-  w = sqrt((-2.0_r32 * log(w)) / w)
+  w = sqrt((-2.0_mrkr32 * log(w)) / w)
   array(iarray) = x * w
   if (iarray < iarray_high) then
     array(iarray + 1) = y * w
+  else
+    multirand_gaussian32buf = y * w
+    multirand_gaussian32buf_filled = .true.
   end if
 end do
 
@@ -537,37 +681,45 @@ end subroutine multirand_gaussian_array32
 ! George Marsaglia's 64-bit KISS                                             !
 ! https://groups.google.com/d/msg/comp.lang.fortran/qFv18ql_WlU/IK8KGZZFJx4J !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-integer(kind = i64) function multirand_kiss()
+integer(kind = mrki64) function multirand_kiss()
 implicit none
 
-integer(kind = i64) :: t
+integer(kind = mrki64) :: t
+
+#define M(x, k) ieor(x, ishft(x, k))
+#define S(x) ishft(x, -63)
 
 t = ishft(multirand_seeds(0), 58) + multirand_seeds(3)
-if (s(multirand_seeds(0)) == s(t)) then
+if (S(multirand_seeds(0)) == S(t)) then
   multirand_seeds(3) = ishft(multirand_seeds(0), -6) &
-    + s(multirand_seeds(0))
+    + S(multirand_seeds(0))
 else
   multirand_seeds(3) = ishft(multirand_seeds(0), -6) &
-    - s(multirand_seeds(0) + t) + 1
+    - S(multirand_seeds(0) + t) + 1
 end if
 multirand_seeds(0) = multirand_seeds(0) + t
-multirand_seeds(1) = m(m(m(multirand_seeds(1), 13_i64), -17_i64), 43_i64)
-multirand_seeds(2) = 6906969069_i64 * multirand_seeds(2) + 1234567_i64
+multirand_seeds(1) = M(multirand_seeds(1), 13_mrki64)
+multirand_seeds(1) = M(multirand_seeds(1), -17_mrki64)
+multirand_seeds(1) = M(multirand_seeds(1), 43_mrki64)
+multirand_seeds(2) = 6906969069_mrki64 * multirand_seeds(2) + 1234567_mrki64
 multirand_kiss = multirand_seeds(0) + multirand_seeds(1) + multirand_seeds(2)
 
-contains
+#undef M
+#undef S
 
-  integer(kind = i64) function m(x, k)
-  implicit none
-  integer(kind = i64), intent(in) :: x, k
-  m = ieor(x, ishft(x, k))
-  end function m
-
-  integer(kind = i64) function s(x)
-  implicit none
-  integer(kind = i64), intent(in) :: x
-  s = ishft(x, -63)
-  end function s
+!contains
+!
+!  integer(kind = mrki64) function m(x, k)
+!  implicit none
+!  integer(kind = mrki64), intent(in) :: x, k
+!  m = ieor(x, ishft(x, k))
+!  end function m
+!
+!  integer(kind = mrki64) function s(x)
+!  implicit none
+!  integer(kind = mrki64), intent(in) :: x
+!  s = ishft(x, -63)
+!  end function s
 
 end function multirand_kiss
 
@@ -576,47 +728,47 @@ end function multirand_kiss
 ! 64-bit Mersenne Twister 19937                              !
 ! http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt64.html !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-integer(kind = i64) function multirand_mt19937()
+integer(kind = mrki64) function multirand_mt19937()
 implicit none
 
 integer, parameter :: &
   NN = 312, &
   MM = 156
-integer(kind = i64), parameter :: &
-  UM = -2147483648_i64, & ! 0xFFFFFFFF80000000ULL
-  LM = 2147483647_i64 ! 0x7FFFFFFFULL
-integer(kind = i64), dimension(0 : 1), parameter :: mag01 = &
-  (/ 0_i64, -5403634167711393303_i64 & ! MATRIX_A 0xB5026F5AA96619E9ULL
+integer(kind = mrki64), parameter :: &
+  UM = -2147483648_mrki64, & ! 0xFFFFFFFF80000000ULL
+  LM = 2147483647_mrki64 ! 0x7FFFFFFFULL
+integer(kind = mrki64), dimension(0 : 1), parameter :: mag01 = &
+  (/ 0_mrki64, -5403634167711393303_mrki64 & ! MATRIX_A 0xB5026F5AA96619E9ULL
   /)
 
 integer :: i
-integer(kind = i64) :: x
+integer(kind = mrki64) :: x
 
 if (multirand_iseed >= NN) then
   do i = 0, NN - MM - 1
     x = ior(iand(multirand_seeds(i), UM), iand(multirand_seeds(i + 1), LM))
     multirand_seeds(i) = ieor( &
       ieor(multirand_seeds(i + MM), ishft(x, -1)), &
-      mag01(iand(x, 1_i64)))
+      mag01(iand(x, 1_mrki64)))
   end do
   do i = NN - MM, NN - 2
     x = ior(iand(multirand_seeds(i), UM), iand(multirand_seeds(i + 1), LM))
     multirand_seeds(i) = ieor( &
       ieor(multirand_seeds(i + (MM - NN)), ishft(x, -1)), &
-      mag01(iand(x, 1_i64)))
+      mag01(iand(x, 1_mrki64)))
   end do
   x = ior(iand(multirand_seeds(NN - 1), UM), iand(multirand_seeds(0), LM))
   multirand_seeds(NN - 1) = ieor( &
     ieor(multirand_seeds(MM - 1), ishft(x, -1)), &
-    mag01(iand(x, 1_i64)))
+    mag01(iand(x, 1_mrki64)))
   multirand_iseed = 0
 end if
 
 x = multirand_seeds(multirand_iseed)
 multirand_iseed = multirand_iseed + 1
-x = ieor(x, iand(ishft(x, -29), 6148914691236517205_i64))
-x = ieor(x, iand(ishft(x, 17), 8202884508482404352_i64))
-x = ieor(x, iand(ishft(x, 37), -2270628950310912_i64))
+x = ieor(x, iand(ishft(x, -29), 6148914691236517205_mrki64))
+x = ieor(x, iand(ishft(x, 17), 8202884508482404352_mrki64))
+x = ieor(x, iand(ishft(x, 37), -2270628950310912_mrki64))
 ! the 3 long integers in the above 3 lines are:
 ! 0x5555555555555555ULL, 0x71D67FFFEDA60000ULL, 0xFFF7EEE000000000ULL
 x = ieor(x, ishft(x, -43))

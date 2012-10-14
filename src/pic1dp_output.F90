@@ -241,12 +241,12 @@ do ispecies = 1, input_nspecies
     if (abs(pv(ip)) >= input_v_max) cycle
 
     sx = px(ip) / input_lx * input_nx_opd
-    ix = floor(sx)
+    ix = floor(sx, kpi)
     sx = 1.0_kpr - (sx - real(ix, kpr))
 
     sv = (pv(ip) + input_v_max) &
       / (input_v_max * 2.0_kpr) * (input_nv_opd - 1)
-    iv = floor(sv)
+    iv = floor(sv, kpi)
     sv = 1.0_kpr - (sv - real(iv, kpr))
 
     ptcldist_markr_xv(iv * input_nx_opd + ix) &

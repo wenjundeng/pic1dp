@@ -101,7 +101,7 @@ else
         if (px(ip) < 0.0_kpr) px(ip) = px(ip) + input_lx
 
         sx = px(ip) / input_lx * input_nx
-        ix = floor(sx)
+        ix = floor(sx, kpi)
         sx = 1.0_kpr - (sx - real(ix, kpr))
       end if
       field_arr_charge1(ix) = field_arr_charge1(ix) + sx * pw(ip)
@@ -245,7 +245,7 @@ do ispecies = 1, input_nspecies
         ! no need to enforce boundary condition here
 
         sx = px(ip) / input_lx * input_nx
-        ix = floor(sx)
+        ix = floor(sx, kpi)
         sx = 1.0_kpr - (sx - real(ix, kpr))
       end if
       electric = pe(ix + 1) * sx
