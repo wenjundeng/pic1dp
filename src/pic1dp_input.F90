@@ -205,10 +205,30 @@ PetscReal, parameter :: input_split_dv_sig_frac = 0.1_kpr
 ! 4: calculate shape function as needed, no matrix
 PetscInt, parameter :: input_iptclshape = 4
 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! random number generator (multirand) parameters !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! algorithm for random integer (engine for all types of random numbers)
+! 1: George Marsaglia's 64-bit KISS
+! 2: 64-bit Mersenne Twister 19937
+PetscInt, parameter :: input_multirand_al_int = 1
+
 ! random seed type
-! 1: random seeds (using system_clock)
-! 2: constant seeds
-PetscInt, parameter :: input_seed_type = 1
+! 1: constant seeds
+! 2: random seeds using system_clock
+! 3: random seeds using /dev/urandom (if fail, fall back to system_clock)
+PetscInt, parameter :: input_multirand_seed_type = 3
+
+! # of warm up rounds
+PetscInt, parameter :: input_multirand_warmup = 5
+
+! whether to run self test during initialization of multirand
+! after a few runs if you don't see warnings from multirand_selftest
+!   in stdout, then you can turn this off
+! once CPU, OS or operating system is changed, you should turn this back on
+!   for a few runs to test if the random number generator is working correctly
+logical, parameter :: input_multirand_selftest = .true.
 
 
 !!!!!!!!!!!!!!!!!!!!!

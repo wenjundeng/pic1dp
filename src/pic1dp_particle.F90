@@ -144,7 +144,7 @@ end subroutine particle_init
 !!!!!!!!!!!!!!!!!!
 subroutine particle_load
 use wtimer
-use gaussian
+use multirand
 use pic1dp_global
 use pic1dp_input
 implicit none
@@ -156,7 +156,8 @@ PetscScalar, dimension(:), pointer :: px, pv, pp, pw
 
 call wtimer_start(global_iwt_particle_load)
 
-call gaussian_init(input_seed_type, global_mype)
+call multirand_init(input_multirand_al_int, input_multirand_seed_type, &
+  global_mype, input_multirand_warmup, input_multirand_selftest)
 
 do ispecies = 1, input_nspecies
   call VecGetArrayF90(particle_x(ispecies), px, global_ierr)
@@ -170,13 +171,13 @@ do ispecies = 1, input_nspecies
 
   if (input_imarker == 1) then ! load markers same as physical distribution
     ! currently only supports input_iptcldist == 0: (shifted) Maxwellian
-    call gaussian_generate(pv)
+    call multirand_gaussian_array(pv)
     pv(:) = pv(:) * sqrt(input_species_temperature(ispecies) &
       / input_species_mass(ispecies)) + input_species_v0(ispecies)
     pp(:) = input_species_density(ispecies) * input_lx &
     / input_species_nparticle_init(ispecies)
   else ! input_imarker == 2, uniform in velocity space
-    call random_number(pv)
+    call multirand_real_array(pv)
     pv(:) = (pv(:) - 0.5_kpr) * 2.0_kpr * input_v_max
     if (input_iptcldist == 1) then ! two-stream1
       pp(:) = input_species_density(ispecies) * input_lx &
@@ -218,7 +219,7 @@ do ispecies = 1, input_nspecies
   end if
 
   ! uniform in x
-  call random_number(px)
+  call multirand_real_array(px)
   px(:) = px(:) * input_lx
 
   pw(:) = 0.0_kpr
@@ -525,6 +526,7 @@ end subroutine particle_merge
 ! particle_compute_dist_pertb_abs_v           !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine particle_throwaway(thsh_frac_dist_pertb_abs_v)
+use multirand
 use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
@@ -581,7 +583,7 @@ do ispecies = 1, input_nspecies
     end if
 
     df = df / maxval(particle_dist_pertb_abs_v(ispecies, :))
-    call random_number(dice)
+    dice = multirand_real()
 
     if ((input_typethrowaway == 1 .and. dice < input_throwaway_frac) &
       .or. (input_typethrowaway == 2 .and. dice > df)) then
@@ -626,7 +628,7 @@ end subroutine particle_throwaway
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine particle_split(thsh_frac_dist_pertb_abs_v)
 use pic1dp_global
-use gaussian
+use multirand
 implicit none
 #include "finclude/petsc.h90"
 
@@ -686,7 +688,7 @@ do ispecies = 1, input_nspecies
     ! ignore important particle
     if (df <= df_thsh) cycle
 
-    call gaussian_generate(grand)
+    call multirand_gaussian_array(grand)
     !grand(:) = grand(:) * input_lx / input_nx * dx_sig_frac
     grand(:) = grand(:) * 2.0_kpr * input_v_max / input_nv &
       * input_split_dv_sig_frac
