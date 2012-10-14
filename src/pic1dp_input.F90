@@ -210,8 +210,8 @@ PetscReal, parameter :: input_split_dv_sig_frac = 0.1_kpr
 ! random number generator (multirand) parameters !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! algorithm for random integer (engine for all types of random numbers)
-! 1: George Marsaglia's 64-bit KISS
-! 2: 64-bit Mersenne Twister 19937
+! 1: George Marsaglia's 64-bit KISS (period ~ 2**(247.42) ~ 10**(74.48))
+! 2: 64-bit Mersenne Twister 19937 (period = 2**19937 - 1 ~ 10**6002)
 PetscInt, parameter :: input_multirand_al_int = 1
 
 ! random seed type
