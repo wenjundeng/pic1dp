@@ -211,8 +211,10 @@ PetscReal, parameter :: input_split_dv_sig_frac = 0.1_kpr
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! algorithm for random integer (engine for all types of random numbers)
 ! 1: George Marsaglia's 64-bit KISS (period ~ 2**(247.42) ~ 10**(74.48))
-! 2: 64-bit Mersenne Twister 19937 (period = 2**19937 - 1 ~ 10**6002)
-PetscInt, parameter :: input_multirand_al_int = 1
+! 2: 64-bit Mersenne Twister 19937 (period = 2**19937 - 1 ~ 10**6001)
+! 3: George Marsaglia's 64-bit SuperKISS
+!   (period = 5*2**1320480*(2**64-1) ~ 10**397524)
+PetscInt, parameter :: input_multirand_al_int = 3
 
 ! random seed type
 ! 1: constant seeds
