@@ -71,7 +71,7 @@ integer, parameter :: multirand_nseed = 312
 ! multirand_int64 is a wrapper for 64-bit uniform random integer generation
 ! choose different generation algorithms using al_int argument 
 !   of multirand_init()
-procedure(multirand_kiss), pointer :: multirand_int64 => null()
+procedure(multirand_kiss64), pointer :: multirand_int64 => null()
 
 ! seeds
 integer(kind = mrki64), dimension(0 : multirand_nseed - 1) :: multirand_seeds
@@ -183,14 +183,14 @@ character(len = 20) :: msg, msg2
 
 if (present(al_int)) then
   if (al_int == 2) then
-    multirand_int64 => multirand_mt19937
+    multirand_int64 => multirand_mt19937_64
   else
-    multirand_int64 => multirand_kiss
+    multirand_int64 => multirand_kiss64
   end if
 end if
-if (associated(multirand_int64, multirand_kiss)) then
+if (associated(multirand_int64, multirand_kiss64)) then
   nseed = 4
-else ! implying multirand_mt19937
+else ! implying multirand_mt19937_64
   nseed = 312
   multirand_iseed = nseed
 end if
@@ -242,7 +242,7 @@ end if
 if (seed_type_act == 3) then
   read (furandom) multirand_seeds(0 : nseed - 1)
   ! make corrections to satisfy certain seed requirements
-  if (associated(multirand_int64, multirand_kiss)) then
+  if (associated(multirand_int64, multirand_kiss64)) then
     do while (multirand_seeds(1) == 0)
       read (furandom) multirand_seeds(1)
     end do
@@ -273,19 +273,19 @@ else
   end do
   ! then use KISS to randomize seeds
   do iseed = 1, 20 ! warm up KISS generator
-    tmpseeds(0) = multirand_kiss()
+    tmpseeds(0) = multirand_kiss64()
   end do
   do iseed = 1, nseed - 1
-    tmpseeds(iseed) = multirand_kiss()
+    tmpseeds(iseed) = multirand_kiss64()
   end do
   ! make corrections to satisfy certain seed requirements
-  if (associated(multirand_int64, multirand_kiss)) then
+  if (associated(multirand_int64, multirand_kiss64)) then
     do while (tmpseeds(1) == 0)
-      tmpseeds(1) = multirand_kiss()
+      tmpseeds(1) = multirand_kiss64()
     end do
     do while (tmpseeds(0) == 0 .and. tmpseeds(3) == 0)
-      tmpseeds(0) = multirand_kiss()
-      tmpseeds(3) = multirand_kiss()
+      tmpseeds(0) = multirand_kiss64()
+      tmpseeds(3) = multirand_kiss64()
     end do
   end if
   multirand_seeds = tmpseeds
@@ -319,13 +319,13 @@ implicit none
 integer, intent(in), optional :: mype
 
 integer, parameter :: ntest = 10
-integer(kind = mrki64), dimension(ntest), target :: test_kiss = (/ &
+integer(kind = mrki64), dimension(ntest), target :: test_kiss64 = (/ &
   8932985056925012148_mrki64,  5710300428094272059_mrki64, &
   -104233206776033023_mrki64, -4143107803135683366_mrki64, &
    542381058189297533_mrki64, -4244931820854714191_mrki64, &
   6853720724624422285_mrki64,  -767542866500872268_mrki64, &
   -257204313086867125_mrki64,  8128797625455304420_mrki64 /), &
-test_mt19937 = (/ &
+test_mt19937_64 = (/ &
  -3932459287431434586_mrki64, 4620546740167642908_mrki64, &
  -5337173792191653896_mrki64, -983805426561117294_mrki64, &
    355488278567739596_mrki64, 7469126240319926998_mrki64, &
@@ -376,18 +376,18 @@ end if
 ! pending to add test of 32-bit numbers
 
 ! test default seeds
-if (associated(multirand_int64, multirand_kiss)) then
+if (associated(multirand_int64, multirand_kiss64)) then
   multirand_seeds(0 : 3) = (/ 1234567890987654321_mrki64, &
     362436362436362436_mrki64, 1066149217761810_mrki64, 123456123456123456_mrki64/)
-  ptest => test_kiss
-else ! implying multirand_mt19937
+  ptest => test_kiss64
+else ! implying multirand_mt19937_64
   multirand_seeds(0) = 5489_mrki64
   do i = 1, 312 - 1
     multirand_seeds(i) = 6364136223846793005_mrki64 &
       * ieor(multirand_seeds(i - 1), ishft(multirand_seeds(i - 1), -62)) &
       + i
   end do
-  ptest => test_mt19937
+  ptest => test_mt19937_64
 end if
 match = .true.
 do i = 1, ntest
@@ -681,7 +681,7 @@ end subroutine multirand_gaussian_array32
 ! George Marsaglia's 64-bit KISS                                             !
 ! https://groups.google.com/d/msg/comp.lang.fortran/qFv18ql_WlU/IK8KGZZFJx4J !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-integer(kind = mrki64) function multirand_kiss()
+integer(kind = mrki64) function multirand_kiss64()
 implicit none
 
 integer(kind = mrki64) :: t
@@ -702,7 +702,7 @@ multirand_seeds(1) = M(multirand_seeds(1), 13_mrki64)
 multirand_seeds(1) = M(multirand_seeds(1), -17_mrki64)
 multirand_seeds(1) = M(multirand_seeds(1), 43_mrki64)
 multirand_seeds(2) = 6906969069_mrki64 * multirand_seeds(2) + 1234567_mrki64
-multirand_kiss = multirand_seeds(0) + multirand_seeds(1) + multirand_seeds(2)
+multirand_kiss64 = multirand_seeds(0) + multirand_seeds(1) + multirand_seeds(2)
 
 #undef M
 #undef S
@@ -721,14 +721,14 @@ multirand_kiss = multirand_seeds(0) + multirand_seeds(1) + multirand_seeds(2)
 !  s = ishft(x, -63)
 !  end function s
 
-end function multirand_kiss
+end function multirand_kiss64
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! 64-bit Mersenne Twister 19937                              !
 ! http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt64.html !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-integer(kind = mrki64) function multirand_mt19937()
+integer(kind = mrki64) function multirand_mt19937_64()
 implicit none
 
 integer, parameter :: &
@@ -773,8 +773,8 @@ x = ieor(x, iand(ishft(x, 37), -2270628950310912_mrki64))
 ! 0x5555555555555555ULL, 0x71D67FFFEDA60000ULL, 0xFFF7EEE000000000ULL
 x = ieor(x, ishft(x, -43))
 
-multirand_mt19937 = x
-end function multirand_mt19937
+multirand_mt19937_64 = x
+end function multirand_mt19937_64
 
 end module multirand
 
