@@ -58,8 +58,8 @@ use pic1dp_input
 implicit none
 #include "finclude/petsc.h90"
 
-PetscInt :: ix
-PetscInt :: imode
+PetscInt :: ix, imode
+PetscInt, dimension(1) :: arrix
 PetscInt :: nindex
 PetscInt, dimension(0 : input_nmode - 1) :: indexes
 PetscScalar, dimension(0 : input_nmode - 1) :: values
@@ -163,12 +163,13 @@ do imode = 0, input_nmode - 1
   indexes(imode) = imode
 end do
 do ix = field_ix_low, field_ix_high - 1
+  arrix(1) = ix
   do imode = 0, input_nmode - 1
     values(imode) = &
       cos(2.0_kpr * PETSC_PI / input_nx * real(input_modes(imode), kpr) * ix)
   end do
   call MatSetValues( &
-    field_fourier_re, 1, ix, &
+    field_fourier_re, 1, arrix, &
     nindex, indexes, values, INSERT_VALUES, global_ierr &
   )
   do imode = 0, input_nmode - 1
@@ -176,7 +177,7 @@ do ix = field_ix_low, field_ix_high - 1
       -sin(2.0_kpr * PETSC_PI / input_nx * real(input_modes(imode), kpr) * ix)
   end do
   call MatSetValues( &
-    field_fourier_im, 1, ix, &
+    field_fourier_im, 1, arrix, &
     nindex, indexes, values, INSERT_VALUES, global_ierr &
   )
 end do
