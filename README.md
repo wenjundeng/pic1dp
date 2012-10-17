@@ -1,6 +1,6 @@
 PIC1D-PETSc
 ===========
-version 2012-09-26 21:02:01-04:00
+version 2012-10-17 17:24:55-04:00
 ---------------------------------
 
 PIC1D-PETSc (pic1dp) is a code simulating 1D electrostatic plasma by solving
