@@ -23,7 +23,7 @@
 ! this module uses some Fortran 2003 features, make sure that your compiler
 !   supports Fortran 2003 standard (GNU Fortran 4.6 suffices)
 ! if your compiler does not support procedure pointer well, then
-!   define NO_PROC_POINTER in your compilation command or uncomment the
+!   use -DNO_PROC_POINTER option when compiling or uncomment the
 !   following line:
 ! #define NO_PROC_POINTER
 !
@@ -366,10 +366,10 @@ elseif (associated(multirand_int64, multirand_superkiss64)) then
   multirand_iseed = 20632
 end if
 
-if (selftest_act) then
-  write (*, '(3a, 5z17)') trim(adjustl(msg)), '[multirand_init] Info: ', &
-    'first 5 seeds:', multirand_seeds(0 : 4)
-end if
+!if (selftest_act) then
+!  write (*, '(3a, 5z17)') trim(adjustl(msg)), '[multirand_init] Info: ', &
+!    'first 5 seeds:', multirand_seeds(0 : 4)
+!end if
 
 ! warm up the generator
 if (present(warmup)) then

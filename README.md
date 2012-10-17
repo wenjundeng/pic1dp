@@ -32,24 +32,13 @@ along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
 System requirements
 -------------------
 
-PIC1D-PETSc requires MPI-2 and [PETSc](http://www.mcs.anl.gov/petsc/) with real
-scalars.  PIC1D-PETSc has been tested with
+PIC1D-PETSc requires MPI-2 and [PETSc](http://www.mcs.anl.gov/petsc/) 3.1+ with
+real scalars.  PIC1D-PETSc has been tested with
 [MPICH2](http://www.mcs.anl.gov/research/projects/mpich2/) 1.4,
 [OpenMPI](http://www.open-mpi.org/) 1.5 and PETSc 3.2.
 
-PIC1D-PETSc also requires a Fortran 95 compiler for compilation.  PIC1D-PETSc
-has been tested with [GNU Fortran](http://gcc.gnu.org/fortran/) 4.6.  [GNU core
-utilities](http://www.gnu.org/software/coreutils/) is required to use GNU make
-for automatic compilation.  If your system is GNU/Linux, it is likely that GNU
-core utilities are ready to use.
-
-Note that BSD-like systems, e.g., FreeBSD and Apple Mac OS X, have utilities
-similar to GNU core utilities, but they differ from the GNU version.  You need
-to install the GNU version of them if you want to compile PIC1D-PETSc using GNU
-make on BSD-like systems.  On Apple Mac OS X, GNU core utilities can be
-installed through [Fink](http://www.finkproject.org/) or
-[MacPorts](http://www.macports.org/).  You can also compile PIC1D-PETSc
-manually without using GNU make.
+PIC1D-PETSc also requires a Fortran 2003 compiler for compilation.  PIC1D-PETSc
+has been tested with [GNU Fortran](http://gcc.gnu.org/fortran/) 4.6.
 
 The visualization app requires [Python](http://www.python.org/) 2.7+,
 [NumPy](http://numpy.scipy.org/) 1.4+ and
@@ -89,8 +78,7 @@ compilation will be put here.
 	interactions.
 	+ `src/pic1dp_output.F90` -- Module for managing output.
 	+ `src/wtimer.F90` -- A wall clock timer using MPI_Wtime().
-	+ `src/gaussian.F90` -- A Gaussian random number generator using polar form
-	of Box-Muller transform.
+	+ `src/multirand.F90` -- A pseudo-random number generator.
 + `tools/` -- Various tools for data analysis and visualization written in
 Python.
 	+ `tools/visual.py` -- Visualizaiton App for PIC1D-PETSc.
@@ -126,7 +114,7 @@ code with the included Makefile.  Before compiling, open the Makefile and go to
 the place after the license part, you will see a few parameters, such as
 compiler name, compiling options, MPI executor, etc., defined there.  Adjust
 them according to your system environment.  After saving your adjustments, and
-making sure MPI Fortran 95 compiler and PETSc are installed correctly, you can
+making sure MPI Fortran 2003 compiler and PETSc are installed correctly, you can
 compile PIC1D-PETSc by executing in the terminal:
 
 	make

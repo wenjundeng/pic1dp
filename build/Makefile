@@ -18,7 +18,7 @@
 
 # Makefile for compiling PIC1D-PETSc
 #
-# MPI Fortran 95 compiler
+# MPI Fortran 2003 compiler
 ifndef MPIF90
 	MPIF90 := mpif90
 endif
