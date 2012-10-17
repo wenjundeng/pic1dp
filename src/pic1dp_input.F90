@@ -44,7 +44,7 @@ PetscInt, parameter :: input_linear = 0
 
 ! length in real space (normalized by electron Debye length)
 PetscReal, parameter :: &
-  input_lx = 2.0_kpr * 3.141592653589793238_kpr / 0.36_kpr
+  input_lx = 2.0_kpr * 3.1415926535897932384626_kpr / 0.36_kpr
 
 ! equilibrium particle velocity distribution.
 ! 0: (shifted) Maxwellian; 1: two-stream1; 2: two-stream2; 3: bump-on-tail
@@ -106,7 +106,7 @@ PetscScalar, dimension(0 : input_init_nmode - 1), parameter :: &
 PetscInt, parameter :: input_deltaf = 1
 
 ! initial time step (normalized by 1 / omega_pe)
-PetscReal, parameter :: input_dt = 0.1_kpr
+PetscReal, parameter :: input_dt = 0.05_kpr
 
 ! allocation for # of marker particles per species
 ! this is also the maximum allowed # of marker particles during simulation
@@ -125,10 +125,17 @@ PetscInt, parameter :: input_imarker = 2
 PetscReal, parameter :: input_v_max = 8.0_kpr
 
 ! # of grid points in real space
-PetscInt, parameter :: input_nx = 64
+PetscInt, parameter :: input_nx = 192
 
-! # of grid points in velocity space for output and resonant detection
+! # of grid points in velocity space for resonant detection
 PetscInt, parameter :: input_nv = 128
+
+! particle shape calculation
+! 1: use PETSc matrix for shape matrix, destroy and re-create matrix every time
+! 2: use PETSc matrix for shape matrix, use MatZeroEntries to reset matrix
+! 3: use regular array for shape matrix
+! 4: calculate shape function as needed, no matrix
+PetscInt, parameter :: input_iptclshape = 4
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -159,14 +166,21 @@ PetscReal, dimension(input_nthrowaway), parameter :: &
   input_tthrowaway = (/ (50.0_kpr + global_itime * 0.5_kpr, &
     global_itime = 1, input_nthrowaway) /)
 
+! type of throwing away
+! 1: throw away based on threshold given by input_thshthrowaway
+! 2: throw away based on profile of int |delta f| dx
+PetscInt, parameter :: input_typethrowaway = 2
+
 ! list of throwing away thresholds in terms of
 ! fraction of absolute value of distribution in v
+! only useful when input_typethrowaway == 1
 PetscReal, dimension(input_nthrowaway), parameter :: &
   input_thshthrowaway = (/ &
     (0.1_kpr / max(input_nthrowaway, 1) * real(global_itime, kpr), &
     global_itime = 1, input_nthrowaway) /)
 
-! fraction of non-resonant particles to be thrown away
+! fraction of not important particles to be thrown away
+! only useful when input_typethrowaway == 1
 PetscReal, parameter :: input_throwaway_frac = 0.9_kpr
 
 ! # of times of splitting particles
@@ -191,17 +205,32 @@ PetscInt, parameter :: input_split_ngroup = 5
 ! variation of change in v in terms of fraction of grid size
 PetscReal, parameter :: input_split_dv_sig_frac = 0.1_kpr
 
-! particle shape calculation
-! 1: use PETSc matrix for shape matrix, destroy and re-create matrix every time
-! 2: use PETSc matrix for shape matrix, use MatZeroEntries to reset matrix
-! 3: use regular array for shape matrix
-! 4: calculate shape function as needed, no matrix
-PetscInt, parameter :: input_iptclshape = 4
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! random number generator (multirand) parameters !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! algorithm for random integer (engine for all types of random numbers)
+! 1: George Marsaglia's 64-bit KISS (period ~ 2**(247.42) ~ 10**(74.48))
+! 2: 64-bit Mersenne Twister 19937 (period = 2**19937 - 1 ~ 10**6001)
+! 3: George Marsaglia's 64-bit SuperKISS
+!   (period = 5*2**1320480*(2**64-1) ~ 10**397524)
+PetscInt, parameter :: input_multirand_al_int = 3
 
 ! random seed type
-! 1: random seeds (using system_clock)
-! 2: constant seeds
-PetscInt, parameter :: input_seed_type = 1
+! 1: constant seeds
+! 2: random seeds using system_clock
+! 3: random seeds using /dev/urandom (if fail, fall back to system_clock)
+PetscInt, parameter :: input_multirand_seed_type = 3
+
+! # of warm up rounds
+PetscInt, parameter :: input_multirand_warmup = 5
+
+! whether to run self test during initialization of multirand
+! after a few runs if you don't see warnings from multirand_selftest
+!   in stdout, then you can turn this off
+! once CPU, OS or operating system is changed, you should turn this back on
+!   for a few runs to test if the random number generator is working correctly
+logical, parameter :: input_multirand_selftest = .true.
 
 
 !!!!!!!!!!!!!!!!!!!!!
@@ -219,12 +248,19 @@ PetscInt, parameter :: input_verbosity = 1
 ! time interval between data output (normalized by 1 / omega_pe)
 PetscReal, parameter :: input_output_interval = 0.5_kpr
 
+! # of x grids for output of particle distribution
+PetscInt, parameter :: input_nx_opd = 64
+
+! # of v grids for output of particle distribution
+PetscInt, parameter :: input_nv_opd = 64
+
 contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! initial perturbation shpae in velocity space !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 PetscScalar function input_pertb_shape(v, ispecies)
+!use multirand
 implicit none
 PetscScalar, intent(in) :: v
 PetscInt, intent(in) :: ispecies
@@ -237,8 +273,7 @@ input_pertb_shape = 1.0_kpr
 ! below are other testing shapes !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! random noise
-!call random_number(input_pertb_shape)
-!input_pertb_shape = input_pertb_shape - 0.5
+!input_pertb_shape = multirand_real64() - 0.5_kpr
 
 !input_pertb_shape = v**30 * exp(-v * v) * 1e-8_kpr
 

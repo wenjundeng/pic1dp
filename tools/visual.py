@@ -373,7 +373,7 @@ class VisualApp:
         fmin = np.min(ptcldist_xv)
         levels = fmin + (fmax - fmin) * np.arange(nlevel) / (nlevel - 1.0)
         cf = self._ax_ptcldist_xv.contourf( \
-            self._data.xv[0], self._data.xv[1], ptcldist_xv, levels)
+            self._data.xv_pd[0], self._data.xv_pd[1], ptcldist_xv, levels)
         plt.colorbar(cf, cax = self._ax_ptcldist_xv_colorbar, \
             format = self._ptcldist_xv_colorbar_formatter)
 
@@ -385,7 +385,7 @@ class VisualApp:
         self._ax_ptcldist_v.clear()
         self._ax_ptcldist_v.set_xlabel('$v$')
         self._ax_ptcldist_v.set_ylabel('particle distribution')
-        self._ax_ptcldist_v.plot(self._data.v, ptcldist_v)
+        self._ax_ptcldist_v.plot(self._data.v_pd, ptcldist_v)
 
     def update_plot_all(self):
         """Update all plots"""

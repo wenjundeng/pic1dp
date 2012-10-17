@@ -23,21 +23,14 @@ import XPetscBinaryIO
 class OutputData:
     """class for handling PIC1D-PETSc output data"""
 
-    nspecies = 0
-    nmode = 0
-    nx = 0
-    nv = 0
-    lx = 0.0
-    v_max = 0.0
-    ntime = 0
-
     def __init__(self, datapath):
         #self._datapath = datapath
         io = XPetscBinaryIO.XPetscBinaryIO()
         fdata = open(os.path.join(datapath, 'pic1dp.out'), 'rb')
 
         # read parameters
-        self.nspecies, self.nmode, self.nx, self.nv = io.readInt(fdata, 4)
+        self.nspecies, self.nmode, self.nx, self.nv, \
+            self.nx_pd, self.nv_pd = io.readInt(fdata, 6)
         self.mode = io.readInt(fdata, self.nmode)
         self.lx, self.v_max = io.readReal(fdata, 2)
 
@@ -47,9 +40,10 @@ class OutputData:
 
         # generate arrays for axises
         self.x = np.arange(self.nx + 1.0) / self.nx * self.lx
-        self.v = (np.arange(self.nv + 0.0) / (self.nv - 1) - 0.5) \
+        self.x_pd = np.arange(self.nx_pd + 1.0) / self.nx_pd * self.lx
+        self.v_pd = (np.arange(self.nv_pd + 0.0) / (self.nv_pd - 1) - 0.5) \
             * 2.0 * self.v_max
-        self.xv = np.meshgrid(self.x, self.v)
+        self.xv_pd = np.meshgrid(self.x_pd, self.v_pd)
 
         # read time dependent data
         self._rawdataset = []
@@ -71,10 +65,11 @@ class OutputData:
                 # distribution in x-v
                 for i in range(self.nspecies):
                     for i in range(3):
-                        rawdata.append(io.readScalar(fdata, self.nx * self.nv))
+                        rawdata.append( \
+                            io.readScalar(fdata, self.nx_pd * self.nv_pd))
 
                     for i in range(3):
-                        rawdata.append(io.readScalar(fdata, self.nv))
+                        rawdata.append(io.readScalar(fdata, self.nv_pd))
 
                 #print rawdata
                 self._rawdataset.append(rawdata)
@@ -126,20 +121,21 @@ class OutputData:
     def get_ptcldist_xv(self, itime, ispecies, iptcldist, periodicbound = True):
         '''get data of particle distribution in x-v plane'''
         if periodicbound:
-            ptcldist_xv = np.zeros((self.nv, self.nx + 1))
+            ptcldist_xv = np.zeros((self.nv_pd, self.nx_pd + 1))
         else:
-            ptcldist_xv = np.zeros((self.nv, self.nx))
+            ptcldist_xv = np.zeros((self.nv_pd, self.nx_pd))
 
         rawdata = self._rawdataset[itime]
         if ispecies < self.nspecies:
-            ptcldist_xv[:, 0 : self.nx] \
-                = rawdata[5 + ispecies * 6 + iptcldist].reshape((self.nv, self.nx))
+            ptcldist_xv[:, 0 : self.nx_pd] \
+                = rawdata[5 + ispecies * 6 + iptcldist].reshape( \
+                (self.nv_pd, self.nx_pd))
         else:
             for i in range(self.nspecies):
-                ptcldist_xv[:, 0 : self.nx] \
-                    += rawdata[5 + i * 6 + iptcldist].reshape((self.nv, self.nx))
+                ptcldist_xv[:, 0 : self.nx_pd] \
+                    += rawdata[5 + i * 6 + iptcldist].reshape((self.nv_pd, self.nx_pd))
         if periodicbound:
-            ptcldist_xv[:, self.nx] = ptcldist_xv[:, 0] # boundary condition
+            ptcldist_xv[:, self.nx_pd] = ptcldist_xv[:, 0] # boundary condition
 
         return ptcldist_xv
 
@@ -149,37 +145,37 @@ class OutputData:
         if ispecies < self.nspecies:
             return rawdata[8 + ispecies * 6 + iptcldist]
         else:
-            ret = np.zeros((self.nv))
+            ret = np.zeros((self.nv_pd))
             for i in range(self.nspecies):
                 ret += rawdata[8 + i * 6 + iptcldist]
             return ret
 
-    def growthrate_energe_fit(self, time1, time2):
+    def growthrate_energy_fit(self, time1, time2):
         '''calculate growth rate using data between time1 and time2'''
         scalar_t = self.get_scalar_t()
         itime1 = np.searchsorted(scalar_t[0], time1) - 1
         itime2 = np.searchsorted(scalar_t[0], time2)
         t = scalar_t[0, itime1 : itime2]
-        energe = scalar_t[1, itime1 : itime2]
+        energy = scalar_t[1, itime1 : itime2]
 
         # fit growthrate
         n = itime2 - itime1
-        lnenerge = np.log(energe)
+        lnenergy = np.log(energy)
         sum_t = np.sum(t)
-        sum_lnenerge = np.sum(lnenerge)
-        sum_tlnenerge = np.sum(t * lnenerge)
+        sum_lnenergy = np.sum(lnenergy)
+        sum_tlnenergy = np.sum(t * lnenergy)
         sum_t2 = np.sum(t * t)
-        gamma = (n * sum_tlnenerge - sum_t * sum_lnenerge) \
+        gamma = (n * sum_tlnenergy - sum_t * sum_lnenergy) \
             / (n * sum_t2 - sum_t * sum_t)
         return gamma
 
-    def findpeak_energe(self, time1, time2):
+    def findpeak_energy(self, time1, time2):
         '''find peak using data between time1 and time2'''
         scalar_t = self.get_scalar_t()
         itime1 = np.searchsorted(scalar_t[0], time1) - 1
         itime2 = np.searchsorted(scalar_t[0], time2)
         t = scalar_t[0, itime1 : itime2]
-        energe = scalar_t[1, itime1 : itime2]
-        peakindex = np.argmax(energe)
-        return [t[peakindex], energe[peakindex]]
+        energy = scalar_t[1, itime1 : itime2]
+        peakindex = np.argmax(energy)
+        return [t[peakindex], energy[peakindex]]
 

@@ -221,7 +221,7 @@ class Dispersion:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser( \
         description = 'Numerically solve for omega ' \
-        + '(real frequency and growth rate) using dispersion of ' \
+        + '(real frequency and growth rate) using analytic dispersion of ' \
         + '1D electrostatic Vlasov-Poisson plasma consisted of '\
         + '(shifted) Maxwellian species')
 
@@ -233,6 +233,7 @@ if __name__ == '__main__':
         help = 'specify at most three different initial guesses', \
         nargs = '+', type = complex)
     parser.add_argument('-k', \
+        metavar = '<k value>',
         help = 'specify one value to calculate for single k value; ' \
         + 'specify two values to calculate for a range of k values; ' \
         + 'specify three values to calculate for a range of k values ' \
@@ -240,8 +241,8 @@ if __name__ == '__main__':
         + 'and start scanning from the first value', \
         nargs = '+', type = float, default = [0.5])
     parser.add_argument('-sks', metavar = '<k step size for scanning>', \
-        help = 'specify step size of k for scanning', \
-        nargs = 1, type = float, default = [0.005])
+        help = 'specify step size of k for scanning; default: 0.005', \
+        type = float, default = 0.005)
     parser.add_argument('-vis', \
         help = 'visualization, make plots of omega(k) and mode structure', \
         action = 'store_true')
@@ -265,20 +266,20 @@ if __name__ == '__main__':
     nk1 = 0
     if nk > 1:
         if nk == 2:
-            nk1 = int((args.k[1] - args.k[0]) / args.sks[0]) + 2
+            nk1 = int((args.k[1] - args.k[0]) / args.sks) + 2
         else:
-            nk1 = int((args.k[2] - args.k[0]) / args.sks[0]) + 2
+            nk1 = int((args.k[2] - args.k[0]) / args.sks) + 2
         if nk1 > 0:
-            arrk = args.k[0] + np.arange(nk1) * args.sks[0]
+            arrk = args.k[0] + np.arange(nk1) * args.sks
             arromega = np.zeros(nk1, dtype = complex)
             arromega[0] = omega
             for ik in range(1, nk1):
                 disp.set_k(arrk[ik])
                 arromega[ik] = disp.solveomega()
             if nk > 2:
-                nk2 = int((args.k[0] - args.k[1]) / args.sks[0]) + 1
+                nk2 = int((args.k[0] - args.k[1]) / args.sks) + 1
                 if nk2 > 0:
-                    arrk2 = args.k[0] + np.arange(-nk2, 0.0) * args.sks[0]
+                    arrk2 = args.k[0] + np.arange(-nk2, 0.0) * args.sks
                     arromega2 = np.zeros(nk2, dtype = complex)
                     #print disp._guess0, disp._guess1, disp._guess2
                     disp.append_guess(arromega[3 : : -1])
@@ -302,6 +303,7 @@ if __name__ == '__main__':
             arrk = [args.k[0]]
             arromega = [omega]
         disp.set_k(args.k[0])
+        disp.append_guess([omega * 0.95, omega * 1.05, omega])
         visdisp = VisualDispersion.VisualDispersion( \
             disp, arrk, arromega)
         plt.show()

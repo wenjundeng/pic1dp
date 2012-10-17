@@ -29,19 +29,19 @@ implicit none
 #ifdef __PETSc
 #include "finclude/petscdef.h"
 PetscReal, parameter :: wtimer_testkind = 0d0
-PetscInt, parameter :: wtrk = kind(wtimer_testkind)
-PetscInt, parameter :: wtik = kind(wtrk)
+PetscInt, parameter :: wtkr = kind(wtimer_testkind)
+PetscInt, parameter :: wtki = kind(wtkr)
 #else
-integer, parameter :: wtrk = selected_real_kind(10)
-integer, parameter :: wtik = selected_int_kind(5)
+integer, parameter :: wtkr = selected_real_kind(10)
+integer, parameter :: wtki = selected_int_kind(5)
 #endif
 
 ! maximum # of timers
-integer(kind = wtik), parameter :: wtimer_nwt_max = 40
+integer(kind = wtki), parameter :: wtimer_nwt_max = 40
 
 ! timers and start time of timers
-real(kind = wtrk), dimension(wtimer_nwt_max) :: &
-  wtimer_wt = 0.0_wtrk, wtimer_wt_start = 0.0_wtrk
+real(kind = wtkr), dimension(wtimer_nwt_max) :: &
+  wtimer_wt = 0.0_wtkr, wtimer_wt_start = 0.0_wtkr
 
 contains
 
@@ -57,7 +57,7 @@ implicit none
 #endif
 
 ! timer index
-integer(kind = wtik), intent(in) :: iwt
+integer(kind = wtki), intent(in) :: iwt
 
 ! iwt out of range
 if (iwt < 1 .or. iwt > wtimer_nwt_max) return
@@ -79,7 +79,7 @@ implicit none
 #endif
 
 ! timer index
-integer(kind = wtik), intent(in) :: iwt
+integer(kind = wtki), intent(in) :: iwt
 
 ! iwt out of range
 if (iwt < 1 .or. iwt > wtimer_nwt_max) return
@@ -96,14 +96,14 @@ subroutine wtimer_print(iwt, string, iwt_percent, escape_percent)
 implicit none
 
 ! timer index
-integer(kind = wtik), intent(in) :: iwt
+integer(kind = wtki), intent(in) :: iwt
 
 ! output string
 character(len = *), intent(out) :: string
 
 ! print the percentage of time of iwt in time of iwt_percent
 ! if not specified, then disable printing percentage
-integer(kind = wtik), intent(in), optional :: iwt_percent
+integer(kind = wtki), intent(in), optional :: iwt_percent
 
 ! whether to escape the % symbol by %%
 ! useful if the string will be passed to PetscPrintf
@@ -130,7 +130,7 @@ if (present(iwt_percent)) then
   end if
 
   write (string, '(2a, f5.1, a)') wtimer_sec2text(wtimer_wt(iwt)), '(', &
-    wtimer_wt(iwt) / wtimer_wt(iwt_percent) * 100.0_wtrk, trim(padding)
+    wtimer_wt(iwt) / wtimer_wt(iwt_percent) * 100.0_wtkr, trim(padding)
 else
   write (string, '(a)') wtimer_sec2text(wtimer_wt(iwt))
 end if
@@ -145,22 +145,22 @@ end subroutine wtimer_print
 character(len = 9) function wtimer_sec2text(sec)
 implicit none
 
-real(kind = wtrk), intent(in) :: sec 
-real(kind = wtrk) :: numtime
+real(kind = wtkr), intent(in) :: sec 
+real(kind = wtkr) :: numtime
 
 character(len = 3) :: suffix
 character(len = 9) :: text
 
 suffix = 'sec'
 numtime = sec
-if (numtime > 60.0_wtrk) then
-  numtime = numtime / 60.0_wtrk
+if (numtime > 60.0_wtkr) then
+  numtime = numtime / 60.0_wtkr
   suffix = 'min'
-  if (numtime > 60.0_wtrk) then
-    numtime = numtime / 60.0_wtrk
+  if (numtime > 60.0_wtkr) then
+    numtime = numtime / 60.0_wtkr
     suffix = 'hr'
-    if (numtime > 24.0_wtrk) then
-      numtime = numtime / 24.0_wtrk
+    if (numtime > 24.0_wtkr) then
+      numtime = numtime / 24.0_wtkr
       suffix = 'day'
     end if
   end if
