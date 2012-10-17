@@ -283,13 +283,15 @@ else
   multirand_seeds(0 : 3) = clock
   if (present(mype)) then
     multirand_seeds(0 : 3) = multirand_seeds(0 : 3) + primes1( &
-      mod(abs(clock + primes2(mod(abs(clock), nprime)) * mype), nprime) &
+      mod(abs(clock + primes2(mod(abs(clock), int(nprime, mrki64))) * mype), &
+      int(nprime, mrki64)) &
     ) * mype
   end if
   do iseed = 0, 3
     multirand_seeds(iseed) = multirand_seeds(iseed) + primes2( &
       mod(abs(multirand_seeds(iseed) &
-      + primes1(mod(abs(clock), nprime)) * iseed), nprime) &
+      + primes1(mod(abs(clock), int(nprime, mrki64))) * iseed), &
+      int(nprime, mrki64)) &
     ) * iseed
   end do
   ! then use KISS to randomize seeds
@@ -800,8 +802,6 @@ multirand_seeds(0) = multirand_seeds(0) + t
 multirand_seeds(1) = XORSHFT(multirand_seeds(1), 13)
 multirand_seeds(1) = XORSHFT(multirand_seeds(1), -17)
 multirand_seeds(1) = XORSHFT(multirand_seeds(1), 43)
-!multirand_seeds(1) = &
-!XORSHFT(XORSHFT(XORSHFT(multirand_seeds(1), 13), -17), 43)
 multirand_seeds(2) = 6906969069_mrki64 * multirand_seeds(2) + 1234567
 multirand_kiss64 = multirand_seeds(0) + multirand_seeds(1) + multirand_seeds(2)
 
