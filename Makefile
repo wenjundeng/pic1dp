@@ -27,6 +27,10 @@ FFLAGS := -O3
 # MPI executor
 MPIEXEC := mpiexec
 
+# if your Fortran compiler does not support procedure pointer well,
+#   uncomment the following line
+# NO_PROC_POINTER := -DNO_PROC_POINTER
+
 # number of processes to build (compile) PIC1D-PETSc
 NPE_BUILD := 4
 

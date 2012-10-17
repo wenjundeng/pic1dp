@@ -16,13 +16,18 @@
 ! along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
 
 
-! a 64-bit puedo-random number generator with multiple choices of algorithms
-!   and multiple choices of distributions
+! this module is a 64-bit puedo-random number generator with multiple choices
+!   of algorithms and multiple choices of distributions
 ! (interfaces for 32-bit random numbers are also provided)
 ! (32-bit interfaces are not fully tested yet)
 ! this module uses some Fortran 2003 features, make sure that your compiler
 !   supports Fortran 2003 standard (GNU Fortran 4.6 suffices)
-! usage:
+! if your compiler does not support procedure pointer well, then
+!   define NO_PROC_POINTER in your compilation command or uncomment the
+!   following line:
+! #define NO_PROC_POINTER
+!
+! usage of this module:
 !   use multirand_init(...) to initialize multirand
 !   then you can use these functions to generate a single random number:
 !     multirand_int64(), multirand_int32(),
@@ -32,7 +37,7 @@
 !     multirand_int_array64(array), multirand_int_array32(array),
 !     multirand_real_array64(array), multirand_real_array32(array),
 !     multirand_gaussian_array64(array), multirand_gaussian_array32(array)
-!   you can also use these generic interfaces for arrays:
+!   you can also use these generic interfaces to fill an array:
 !     multirand_int_array(array),
 !     multirand_real_array(array),
 !     multirand_gaussian_array(array)
@@ -84,10 +89,15 @@ integer(kind = mrki64), dimension(0 : multirand_nseed - 1) :: multirand_seeds
 ! seed index
 integer :: multirand_iseed
 
+#ifdef NO_PROC_POINTER
+! algorithm index
+integer :: multirand_al_int
+#else
 ! multirand_int64 is a wrapper for 64-bit uniform random integer generation
 ! choose different generation algorithms using al_int argument 
 !   of multirand_init()
 procedure(multirand_kiss64), pointer :: multirand_int64 => null()
+#endif
 
 ! 32-bit random integer buffer
 integer(kind = mrki32) :: multirand_int32buf
@@ -198,16 +208,23 @@ if (present(al_int)) then
 else
   al_int_act = 3
 end if
+#ifdef NO_PROC_POINTER
+multirand_al_int = al_int_act
+#endif
 if (al_int_act == 2) then
+#ifndef NO_PROC_POINTER
   multirand_int64 => multirand_mt19937_64
+#endif
   nseed = 312
-!  multirand_iseed = nseed
 elseif (al_int_act == 3) then
+#ifndef NO_PROC_POINTER
   multirand_int64 => multirand_superkiss64
+#endif
   nseed = 20635
-!  multirand_iseed = 20632
 else
+#ifndef NO_PROC_POINTER
   multirand_int64 => multirand_kiss64
+#endif
   nseed = 4
 end if
 
@@ -259,14 +276,22 @@ end if
 if (seed_type_act == 3) then
   read (furandom) multirand_seeds(0 : nseed - 1)
   ! make corrections to satisfy certain seed requirements
+#ifdef NO_PROC_POINTER
+  if (multirand_al_int == 1) then
+#else
   if (associated(multirand_int64, multirand_kiss64)) then
+#endif
     do while (multirand_seeds(1) == 0)
       read (furandom) multirand_seeds(1)
     end do
     do while (multirand_seeds(0) == 0 .and. multirand_seeds(3) == 0)
       read (furandom) multirand_seeds(0), multirand_seeds(3)
     end do
+#ifdef NO_PROC_POINTER
+  elseif (multirand_al_int == 3) then
+#else
   elseif (associated(multirand_int64, multirand_superkiss64)) then
+#endif
     do while (multirand_seeds(20634) == 0)
       read (furandom) multirand_seeds(20634)
     end do
@@ -302,7 +327,11 @@ else
     tmpseeds(iseed) = multirand_kiss64()
   end do
   ! make corrections to satisfy certain seed requirements
+#ifdef NO_PROC_POINTER
+  if (multirand_al_int == 1) then
+#else
   if (associated(multirand_int64, multirand_kiss64)) then
+#endif
     do while (tmpseeds(1) == 0)
       tmpseeds(1) = multirand_kiss64()
     end do
@@ -310,7 +339,11 @@ else
       tmpseeds(0) = multirand_kiss64()
       tmpseeds(3) = multirand_kiss64()
     end do
+#ifdef NO_PROC_POINTER
+  elseif (multirand_al_int == 3) then
+#else
   elseif (associated(multirand_int64, multirand_superkiss64)) then
+#endif
     do while (multirand_seeds(20634) == 0)
       tmpseeds(20634) = multirand_kiss64()
     end do
@@ -319,9 +352,17 @@ else
 end if ! else of if (seed_type_act == 3)
 
 ! set seed array index
+#ifdef NO_PROC_POINTER
+if (multirand_al_int == 2) then
+#else
 if (associated(multirand_int64, multirand_mt19937_64)) then
+#endif
   multirand_iseed = 312
-elseif (associated(multirand_int64, multirand_mt19937_64)) then
+#ifdef NO_PROC_POINTER
+elseif (multirand_al_int == 3) then
+#else
+elseif (associated(multirand_int64, multirand_superkiss64)) then
+#endif
   multirand_iseed = 20632
 end if
 
@@ -433,7 +474,11 @@ end if
 ! pending to add test of 32-bit numbers
 
 ! test default seeds
+#ifdef NO_PROC_POINTER
+if (multirand_al_int == 2) then
+#else
 if (associated(multirand_int64, multirand_mt19937_64)) then
+#endif
   multirand_seeds(0) = 5489_mrki64
   do multirand_iseed = 1, 312 - 1
     multirand_seeds(multirand_iseed) = 6364136223846793005_mrki64 &
@@ -444,7 +489,11 @@ if (associated(multirand_int64, multirand_mt19937_64)) then
   ptest_head => test_mt19937_64_head
   ptest_tail => test_mt19937_64_tail
   itail = 312 - ntest / 2
+#ifdef NO_PROC_POINTER
+elseif (multirand_al_int == 3) then
+#else
 elseif (associated(multirand_int64, multirand_superkiss64)) then
+#endif
   multirand_seeds(20632 : 20634) = (/ 36243678541_mrki64, &
     12367890123456_mrki64, 521288629546311_mrki64 /)
   do multirand_iseed = 0, 20631
@@ -503,6 +552,23 @@ elseif (associated(ptest_tail)) then
   end if
 end if ! elseif (associated(ptest_tail))
 end subroutine multirand_selftest
+
+
+#ifdef NO_PROC_POINTER
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! generate a 64-bit uniform random integer !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+integer(kind = mrki64) function multirand_int64()
+implicit none
+if (multirand_al_int == 2) then
+  multirand_int64 = multirand_mt19937_64()
+elseif (multirand_al_int == 3) then
+  multirand_int64 = multirand_superkiss64()
+else
+  multirand_int64 = multirand_kiss64()
+end if
+end function multirand_int64
+#endif
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
