@@ -16,13 +16,18 @@
 ! along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
 
 
-! a 64-bit puedo-random number generator with multiple choices of algorithms
-!   and multiple choices of distributions
+! this module is a 64-bit puedo-random number generator with multiple choices
+!   of algorithms and multiple choices of distributions
 ! (interfaces for 32-bit random numbers are also provided)
 ! (32-bit interfaces are not fully tested yet)
 ! this module uses some Fortran 2003 features, make sure that your compiler
 !   supports Fortran 2003 standard (GNU Fortran 4.6 suffices)
-! usage:
+! if your compiler does not support procedure pointer well, then
+!   use -DNO_PROC_POINTER option when compiling or uncomment the
+!   following line:
+! #define NO_PROC_POINTER
+!
+! usage of this module:
 !   use multirand_init(...) to initialize multirand
 !   then you can use these functions to generate a single random number:
 !     multirand_int64(), multirand_int32(),
@@ -32,10 +37,12 @@
 !     multirand_int_array64(array), multirand_int_array32(array),
 !     multirand_real_array64(array), multirand_real_array32(array),
 !     multirand_gaussian_array64(array), multirand_gaussian_array32(array)
-!   you can also use these generic interfaces for arrays:
+!   you can also use these generic interfaces to fill an array:
 !     multirand_int_array(array),
 !     multirand_real_array(array),
 !     multirand_gaussian_array(array)
+! note that these functions and subroutines are NOT thread-safe,
+!   which needs to be addressed some time
 module multirand
 implicit none
 
@@ -62,9 +69,11 @@ integer, parameter :: mrki32 = selected_int_kind(5)
 integer, parameter :: mrkr32 = selected_real_kind(5)
 
 ! real number of 2**63-1, the maximum value for signed 64-bit integer
-real(kind = mrkr64), parameter :: multirand_max64 = 9223372036854775807.0_mrkr64
+real(kind = mrkr64), parameter :: multirand_max64 &
+  = 9223372036854775807.0_mrkr64
 ! real number of 2**64-1, the maximum value for unsigned 64-bit integer
-real(kind = mrkr64), parameter :: multirand_maxu64 = 18446744073709551615.0_mrkr64
+real(kind = mrkr64), parameter :: multirand_maxu64 &
+  = 18446744073709551615.0_mrkr64
 
 ! real number of 2**31-1, the maximum value for signed 32-bit integer
 real(kind = mrkr32), parameter :: multirand_max32 = 2147483647.0_mrkr32
@@ -80,10 +89,15 @@ integer(kind = mrki64), dimension(0 : multirand_nseed - 1) :: multirand_seeds
 ! seed index
 integer :: multirand_iseed
 
+#ifdef NO_PROC_POINTER
+! algorithm index
+integer :: multirand_al_int
+#else
 ! multirand_int64 is a wrapper for 64-bit uniform random integer generation
 ! choose different generation algorithms using al_int argument 
 !   of multirand_init()
 procedure(multirand_kiss64), pointer :: multirand_int64 => null()
+#endif
 
 ! 32-bit random integer buffer
 integer(kind = mrki32) :: multirand_int32buf
@@ -192,18 +206,25 @@ character(len = 20) :: msg, msg2
 if (present(al_int)) then
   al_int_act = al_int
 else
-  al_int_act = 1
+  al_int_act = 3
 end if
-if (al_int == 2) then
+#ifdef NO_PROC_POINTER
+multirand_al_int = al_int_act
+#endif
+if (al_int_act == 2) then
+#ifndef NO_PROC_POINTER
   multirand_int64 => multirand_mt19937_64
+#endif
   nseed = 312
-  multirand_iseed = nseed
-elseif (al_int == 3) then
+elseif (al_int_act == 3) then
+#ifndef NO_PROC_POINTER
   multirand_int64 => multirand_superkiss64
+#endif
   nseed = 20635
-  multirand_iseed = 0
 else
+#ifndef NO_PROC_POINTER
   multirand_int64 => multirand_kiss64
+#endif
   nseed = 4
 end if
 
@@ -255,12 +276,24 @@ end if
 if (seed_type_act == 3) then
   read (furandom) multirand_seeds(0 : nseed - 1)
   ! make corrections to satisfy certain seed requirements
+#ifdef NO_PROC_POINTER
+  if (multirand_al_int == 1) then
+#else
   if (associated(multirand_int64, multirand_kiss64)) then
+#endif
     do while (multirand_seeds(1) == 0)
       read (furandom) multirand_seeds(1)
     end do
     do while (multirand_seeds(0) == 0 .and. multirand_seeds(3) == 0)
       read (furandom) multirand_seeds(0), multirand_seeds(3)
+    end do
+#ifdef NO_PROC_POINTER
+  elseif (multirand_al_int == 3) then
+#else
+  elseif (associated(multirand_int64, multirand_superkiss64)) then
+#endif
+    do while (multirand_seeds(20634) == 0)
+      read (furandom) multirand_seeds(20634)
     end do
   end if
   close (furandom)
@@ -275,13 +308,15 @@ else
   multirand_seeds(0 : 3) = clock
   if (present(mype)) then
     multirand_seeds(0 : 3) = multirand_seeds(0 : 3) + primes1( &
-      mod(abs(clock + primes2(mod(abs(clock), nprime)) * mype), nprime) &
+      mod(abs(clock + primes2(mod(abs(clock), int(nprime, mrki64))) * mype), &
+      int(nprime, mrki64)) &
     ) * mype
   end if
   do iseed = 0, 3
     multirand_seeds(iseed) = multirand_seeds(iseed) + primes2( &
       mod(abs(multirand_seeds(iseed) &
-      + primes1(mod(abs(clock), nprime)) * iseed), nprime) &
+      + primes1(mod(abs(clock), int(nprime, mrki64))) * iseed), &
+      int(nprime, mrki64)) &
     ) * iseed
   end do
   ! then use KISS to randomize seeds
@@ -292,7 +327,11 @@ else
     tmpseeds(iseed) = multirand_kiss64()
   end do
   ! make corrections to satisfy certain seed requirements
+#ifdef NO_PROC_POINTER
+  if (multirand_al_int == 1) then
+#else
   if (associated(multirand_int64, multirand_kiss64)) then
+#endif
     do while (tmpseeds(1) == 0)
       tmpseeds(1) = multirand_kiss64()
     end do
@@ -300,14 +339,37 @@ else
       tmpseeds(0) = multirand_kiss64()
       tmpseeds(3) = multirand_kiss64()
     end do
+#ifdef NO_PROC_POINTER
+  elseif (multirand_al_int == 3) then
+#else
+  elseif (associated(multirand_int64, multirand_superkiss64)) then
+#endif
+    do while (multirand_seeds(20634) == 0)
+      tmpseeds(20634) = multirand_kiss64()
+    end do
   end if
-  multirand_seeds = tmpseeds
+  multirand_seeds(:) = tmpseeds(:)
 end if ! else of if (seed_type_act == 3)
 
-if (selftest_act) then
-  write (*, '(3a, 5z17)') trim(adjustl(msg)), '[multirand_init] Info: ', &
-    'first 5 seeds:', multirand_seeds(0 : 4)
+! set seed array index
+#ifdef NO_PROC_POINTER
+if (multirand_al_int == 2) then
+#else
+if (associated(multirand_int64, multirand_mt19937_64)) then
+#endif
+  multirand_iseed = 312
+#ifdef NO_PROC_POINTER
+elseif (multirand_al_int == 3) then
+#else
+elseif (associated(multirand_int64, multirand_superkiss64)) then
+#endif
+  multirand_iseed = 20632
 end if
+
+!if (selftest_act) then
+!  write (*, '(3a, 5z17)') trim(adjustl(msg)), '[multirand_init] Info: ', &
+!    'first 5 seeds:', multirand_seeds(0 : 4)
+!end if
 
 ! warm up the generator
 if (present(warmup)) then
@@ -345,11 +407,11 @@ test_mt19937_64_head = (/ &
   4635995468481642529_mrki64,  418970542659199878_mrki64, &
  -8842573084457035060_mrki64, 6358044926049913402_mrki64 /), &
 test_mt19937_64_tail = (/ &
- -3932459287431434586_mrki64, 4620546740167642908_mrki64, &
- -5337173792191653896_mrki64, -983805426561117294_mrki64, &
-   355488278567739596_mrki64, 7469126240319926998_mrki64, &
-  4635995468481642529_mrki64,  418970542659199878_mrki64, &
- -8842573084457035060_mrki64, 6358044926049913402_mrki64 /), &
+-7948593974297132281_mrki64,  1921007855220546564_mrki64, &
+ 7643484074408755248_mrki64, -7128315020423208677_mrki64, &
+ 1370093900783164344_mrki64,  6776537281339823025_mrki64, &
+ 3450492372588984223_mrki64, -9045729527952115285_mrki64, &
+ 7896519943553875907_mrki64, -4143300141377237606_mrki64 /), &
 test_superkiss64_head = (/ &
   6140839658375754198_mrki64,   -95225469143006167_mrki64, &
  -9148462456964506707_mrki64,  3912874252778582253_mrki64, &
@@ -412,32 +474,46 @@ end if
 ! pending to add test of 32-bit numbers
 
 ! test default seeds
+#ifdef NO_PROC_POINTER
+if (multirand_al_int == 2) then
+#else
 if (associated(multirand_int64, multirand_mt19937_64)) then
+#endif
   multirand_seeds(0) = 5489_mrki64
-  do i = 1, 312 - 1
-    multirand_seeds(i) = 6364136223846793005_mrki64 &
-      * ieor(multirand_seeds(i - 1), ishft(multirand_seeds(i - 1), -62)) &
-      + i
+  do multirand_iseed = 1, 312 - 1
+    multirand_seeds(multirand_iseed) = 6364136223846793005_mrki64 &
+      * XORSHFT(multirand_seeds(multirand_iseed - 1), -62) &
+      + multirand_iseed
   end do
+  multirand_iseed = 312
   ptest_head => test_mt19937_64_head
   ptest_tail => test_mt19937_64_tail
   itail = 312 - ntest / 2
+#ifdef NO_PROC_POINTER
+elseif (multirand_al_int == 3) then
+#else
 elseif (associated(multirand_int64, multirand_superkiss64)) then
+#endif
   multirand_seeds(20632 : 20634) = (/ 36243678541_mrki64, &
     12367890123456_mrki64, 521288629546311_mrki64 /)
-  do i = 0, 20631
+  do multirand_iseed = 0, 20631
     multirand_seeds(20633) = multirand_seeds(20633) * 6906969069_mrki64 + 123
     multirand_seeds(20634) = XORSHFT(multirand_seeds(20634), 13)
     multirand_seeds(20634) = XORSHFT(multirand_seeds(20634), -17)
     multirand_seeds(20634) = XORSHFT(multirand_seeds(20634), 43)
-    multirand_seeds(i) = multirand_seeds(20633) + multirand_seeds(20634)
+    multirand_seeds(multirand_iseed) &
+      = multirand_seeds(20633) + multirand_seeds(20634)
   end do
+  !write (*, *) multirand_seeds(20632 : 20634), &
+  !  multirand_seeds(0), multirand_seeds(20631)
+  multirand_iseed = 20632
   ptest_head => test_superkiss64_head
   ptest_tail => test_superkiss64_tail
   itail = 20632 - ntest / 2
 else ! implying multirand_kiss64
   multirand_seeds(0 : 3) = (/ 1234567890987654321_mrki64, &
-    362436362436362436_mrki64, 1066149217761810_mrki64, 123456123456123456_mrki64/)
+    362436362436362436_mrki64, 1066149217761810_mrki64, &
+    123456123456123456_mrki64/)
   ptest_head => test_kiss64
   nullify (ptest_tail)
 end if
@@ -463,8 +539,8 @@ elseif (associated(ptest_tail)) then
   do i = itail + 1, itail + ntest
 !    k = multirand_int64()
 !    if (k /= ptest_tail(i)) then
-!      write (*, *) k, ptest_tail(i)
-    if (multirand_int64() /= ptest_tail(i)) then
+!      write (*, *) i, k, ptest_tail(i)
+    if (multirand_int64() /= ptest_tail(i - itail)) then
       match = .false.
       exit
     end if
@@ -474,13 +550,30 @@ elseif (associated(ptest_tail)) then
       'random number generator with default seeds is giving unexpected ', &
       'tail sequence.'
   end if
-end if
+end if ! elseif (associated(ptest_tail))
 end subroutine multirand_selftest
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! generate 32-bit uniform random integer !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#ifdef NO_PROC_POINTER
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! generate a 64-bit uniform random integer !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+integer(kind = mrki64) function multirand_int64()
+implicit none
+if (multirand_al_int == 2) then
+  multirand_int64 = multirand_mt19937_64()
+elseif (multirand_al_int == 3) then
+  multirand_int64 = multirand_superkiss64()
+else
+  multirand_int64 = multirand_kiss64()
+end if
+end function multirand_int64
+#endif
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! generate a 32-bit uniform random integer !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 integer(kind = mrki32) function multirand_int32()
 implicit none
 integer(kind = mrki64) :: irand64
@@ -497,9 +590,9 @@ multirand_int32buf_filled = .true.
 end function multirand_int32
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! generate uniform random integers to fill an array !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! fill array with 64-bit uniform random integers !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine multirand_int_array64(array)
 implicit none
 
@@ -514,9 +607,9 @@ end do
 end subroutine multirand_int_array64
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! generate 32-bit uniform random integers to fill an array !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! fill array with 32-bit uniform random integers !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine multirand_int_array32(array)
 implicit none
 
@@ -545,10 +638,10 @@ end do
 end subroutine multirand_int_array32
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! generate a uniform [0, 1] real random number     !
-! use multirand_selftest() for safe boundary check !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! generate a 64-bit uniform [0, 1] real random number !
+! use multirand_selftest() for safe boundary check    !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 real(kind = mrkr64) function multirand_real64()
 implicit none
 multirand_real64 = INT2REAL64(multirand_int64())
@@ -565,10 +658,10 @@ multirand_real32 = INT2REAL32(multirand_int32())
 end function multirand_real32
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! generate uniform [0, 1] real random numbers to fill an array !
-! use multirand_selftest() for safe boundary check             !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! fill array with 64-bit uniform [0, 1] real random numbers !
+! use multirand_selftest() for safe boundary check          !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine multirand_real_array64(array)
 implicit none
 
@@ -583,10 +676,10 @@ end do
 end subroutine multirand_real_array64
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! generate uniform [0, 1] 32-bit real random numbers to fill an array !
-! use multirand_selftest() for safe boundary check             !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! fill array with 32-bit uniform [0, 1] real random numbers !
+! use multirand_selftest() for safe boundary check          !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine multirand_real_array32(array)
 implicit none
 
@@ -615,9 +708,10 @@ end do
 end subroutine multirand_real_array32
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! standard Gaussian random number using George Marsaglia's polar method !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! generate a 64-bit standard Gaussian random number !
+! using George Marsaglia's polar method             !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 real(kind = mrkr64) function multirand_gaussian64()
 implicit none
 
@@ -640,9 +734,10 @@ multirand_gaussian64buf_filled = .true.
 end function multirand_gaussian64
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! 32-bit standard Gaussian random number !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! generate a 32-bit standard Gaussian random number !
+! using George Marsaglia's polar method             !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 real(kind = mrkr32) function multirand_gaussian32()
 implicit none
 
@@ -667,9 +762,10 @@ multirand_gaussian32buf_filled = .true.
 end function multirand_gaussian32
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! fill an array with standard Gaussian random numbers !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! fill array with 64-bit standard Gaussian random numbers !
+! using George Marsaglia's polar method                   !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine multirand_gaussian_array64(array)
 implicit none
 
@@ -707,9 +803,10 @@ end do
 end subroutine multirand_gaussian_array64
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! fill an 32-bit array with standard Gaussian random numbers !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! fill array with 32-bit standard Gaussian random numbers !
+! using George Marsaglia's polar method                   !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine multirand_gaussian_array32(array)
 implicit none
 
@@ -771,8 +868,6 @@ multirand_seeds(0) = multirand_seeds(0) + t
 multirand_seeds(1) = XORSHFT(multirand_seeds(1), 13)
 multirand_seeds(1) = XORSHFT(multirand_seeds(1), -17)
 multirand_seeds(1) = XORSHFT(multirand_seeds(1), 43)
-!multirand_seeds(1) = &
-!XORSHFT(XORSHFT(XORSHFT(multirand_seeds(1), 13), -17), 43)
 multirand_seeds(2) = 6906969069_mrki64 * multirand_seeds(2) + 1234567
 multirand_kiss64 = multirand_seeds(0) + multirand_seeds(1) + multirand_seeds(2)
 
@@ -824,11 +919,6 @@ if (multirand_iseed >= nn) then
   multirand_iseed = 0
 end if
 
-!x = multirand_seeds(multirand_iseed)
-!x = ieor(x, iand(ishft(x, -29), 6148914691236517205_mrki64))
-!x = ieor(x, iand(ishft(x, 17), 8202884508482404352_mrki64))
-!x = ieor(x, iand(ishft(x, 37), -2270628950310912_mrki64))
-!x = ieor(x, ishft(x, -43))
 x = XORANDSHFT(multirand_seeds(multirand_iseed), -29, and1)
 x = XORANDSHFT(x, 17, and2)
 x = XORANDSHFT(x, 37, and3)

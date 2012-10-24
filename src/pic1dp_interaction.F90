@@ -22,6 +22,9 @@ use pic1dp_field
 use pic1dp_particle
 implicit none
 
+! the following line is to work around a bug in PETSc 3.3-p2 and before
+#include "finclude/petsctsdef.h"
+
 contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -280,6 +280,7 @@ implicit none
 
 PetscInt :: ispecies, nindex
 PetscInt :: ip
+PetscInt, dimension(1) :: arrip
 PetscInt :: ix1, ix2
 PetscScalar :: sx
 PetscScalar, dimension(:), pointer :: px
@@ -320,8 +321,9 @@ do ispecies = 1, input_nspecies
       indexes(1) = ix2
       values(0) = (1.0_kpr - sx)
       values(1) = sx
+      arrip(1) = ip + particle_ip_low - 1
       call MatSetValues( &
-        particle_shape_x(ispecies), 1, ip + particle_ip_low - 1, &
+        particle_shape_x(ispecies), 1, arrip, &
         nindex, indexes, values, INSERT_VALUES, global_ierr &
       )
       CHKERRQ(global_ierr)

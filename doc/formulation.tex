@@ -57,7 +57,7 @@
 \newcommand{\me}{\mathrm{e}}
 
 \title{1D electrostatic $\delta f$ particle-in-cell (PIC) formulation in vector-matrix form \\
-\large for \texttt{PIC1D-PETSc version 2012-09-26 21:02:01-04:00}}
+\large for \texttt{PIC1D-PETSc version 2012-10-17 17:24:55-04:00}}
 \author{Wenjun Deng}
 \maketitle
 
@@ -101,7 +101,7 @@ Although now multiple options for equilibrium distribution are implemented in \t
 
 $\delta f$ formulation:
 \begin{eqnarray}
-	\frac{\md}{\md t} \delta f & = & - \frac{\md}{\md t} f_0 \nonumber \\
+	\frac{\md}{\md t} \delta f_{\alpha} & = & - \frac{\md}{\md t} f_{0 \alpha} \nonumber \\
 	& = & - \frac{Z_\alpha}{m_\alpha} E \partial_v f_{0 \alpha} \textrm{ ,} \\
 	\partial_x E & = & 4 \pi \sum_\alpha Z_\alpha \,\delta n_\alpha \textrm{ .}
 \end{eqnarray}

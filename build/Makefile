@@ -18,7 +18,7 @@
 
 # Makefile for compiling PIC1D-PETSc
 #
-# MPI Fortran 95 compiler
+# MPI Fortran 2003 compiler
 ifndef MPIF90
 	MPIF90 := mpif90
 endif
@@ -28,6 +28,10 @@ ifndef FFLAGS
 #	FFLAGS := -g -fbounds-check -ffpe-trap=invalid,zero,overflow # for debugging
 	FFLAGS := -O3
 endif
+
+# if your Fortran compiler does not support procedure pointer well,
+#   uncomment the following line
+# NO_PROC_POINTER := -DNO_PROC_POINTER
 
 # source file path
 SRCDIR := ../src
@@ -49,7 +53,7 @@ pic1dp.o : $(SRCDIR)/pic1dp.F90 multirand.o wtimer.o pic1dp_global.o \
 	$(MPIF90) $(FFLAGS) -c -o $@ $< $(FCPPFLAGS)
 
 multirand.o : $(SRCDIR)/multirand.F90
-	$(MPIF90) $(FFLAGS) -c -o $@ $< $(FCPPFLAGS)
+	$(MPIF90) $(FFLAGS) $(NO_PROC_POINTER) -c -o $@ $< $(FCPPFLAGS)
 
 wtimer.o : $(SRCDIR)/wtimer.F90
 	$(MPIF90) $(FFLAGS) -D__PETSc -c -o $@ $< $(FCPPFLAGS)
