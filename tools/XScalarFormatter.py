@@ -18,6 +18,7 @@
 
 import numpy as np
 import matplotlib as mpl
+import matplotlib.pyplot as plt # needed for mpl.ticker
 
 class XScalarFormatter(mpl.ticker.ScalarFormatter):
     """eXtended ScalarFormatter"""
