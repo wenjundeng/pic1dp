@@ -16,18 +16,18 @@
 ! along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
 
 
-! this module is a 64-bit puedo-random number generator with multiple choices
+! multirand is a 64-bit puedo-random number generator with multiple choices
 !   of algorithms and multiple choices of distributions
 ! (interfaces for 32-bit random numbers are also provided)
 ! (32-bit interfaces are not fully tested yet)
-! this module uses some Fortran 2003 features, make sure that your compiler
+! multirand uses some Fortran 2003 features, make sure that your compiler
 !   supports Fortran 2003 standard (GNU Fortran 4.6 suffices)
 ! if your compiler does not support procedure pointer well, then
 !   use -DNO_PROC_POINTER option when compiling or uncomment the
 !   following line:
 ! #define NO_PROC_POINTER
 !
-! usage of this module:
+! usage of multirand:
 !   use multirand_init(...) to initialize multirand
 !   then you can use these functions to generate a single random number:
 !     multirand_int64(), multirand_int32(),
@@ -42,7 +42,7 @@
 !     multirand_real_array(array),
 !     multirand_gaussian_array(array)
 ! note that these functions and subroutines are NOT thread-safe,
-!   which needs to be addressed some time
+!   which needs to be addressed in future
 module multirand
 implicit none
 
