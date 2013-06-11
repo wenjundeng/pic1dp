@@ -114,10 +114,11 @@ class VisualDispersion:
         nlevel = 64
         fmax = np.max(modestruct[2])
         fmin = np.min(modestruct[2])
+        x_mg, v_mg = np.meshgrid(modestruct[0], modestruct[1])
         levels = fmin + (fmax - fmin) * np.arange(nlevel) / (nlevel - 1.0)
         #print modestruct[0].shape, modestruct[1].shape, modestruct[2].shape
         cf = self._ax_modestruct.contourf( \
-            modestruct[0], modestruct[1], modestruct[2], levels)
+            x_mg, v_mg, modestruct[2], levels)
         plt.colorbar(cf, cax = self._ax_modestruct_colorbar, \
             format = self._modestruct_colorbar_formatter)
 
