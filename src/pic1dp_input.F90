@@ -112,7 +112,7 @@ PetscReal, parameter :: input_dt = 0.05_kpr
 ! this is also the maximum allowed # of marker particles during simulation
 PetscInt, parameter :: input_nparticle_max = 6400000
 
-! # of initial loaded particles for each species
+! # of initial loaded marker particles for each species
 PetscInt, dimension(input_nspecies), parameter :: &
   input_species_nparticle_init = (/ 6400000 /)
 
@@ -157,31 +157,31 @@ PetscReal, dimension(input_nmerge), parameter :: &
     (0.1_kpr / max(input_nmerge, 1) * real(global_itime, kpr), &
     global_itime = 1, input_nmerge) /)
 
-! # of times of throwing away particles
-! (set to 0 to disable throwing away)
-PetscInt, parameter :: input_nthrowaway = 0
+! # of times of removing particles
+! (set to 0 to disable removal)
+PetscInt, parameter :: input_nremove = 0
 
-! list of times to throw away particles, must be in ascending order
-PetscReal, dimension(input_nthrowaway), parameter :: &
-  input_tthrowaway = (/ (50.0_kpr + global_itime * 0.5_kpr, &
-    global_itime = 1, input_nthrowaway) /)
+! list of times to remove particles, must be in ascending order
+PetscReal, dimension(input_nremove), parameter :: &
+  input_tremove = (/ (50.0_kpr + global_itime * 0.5_kpr, &
+    global_itime = 1, input_nremove) /)
 
-! type of throwing away
-! 1: throw away based on threshold given by input_thshthrowaway
-! 2: throw away based on profile of int |delta f| dx
-PetscInt, parameter :: input_typethrowaway = 2
+! type of removal
+! 1: remove based on threshold given by input_thshremove
+! 2: remove based on profile of int |delta f| dx
+PetscInt, parameter :: input_typeremove = 2
 
-! list of throwing away thresholds in terms of
+! list of removing thresholds in terms of
 ! fraction of absolute value of distribution in v
-! only useful when input_typethrowaway == 1
-PetscReal, dimension(input_nthrowaway), parameter :: &
-  input_thshthrowaway = (/ &
-    (0.1_kpr / max(input_nthrowaway, 1) * real(global_itime, kpr), &
-    global_itime = 1, input_nthrowaway) /)
+! only useful when input_typeremove == 1
+PetscReal, dimension(input_nremove), parameter :: &
+  input_thshremove = (/ &
+    (0.1_kpr / max(input_nremove, 1) * real(global_itime, kpr), &
+    global_itime = 1, input_nremove) /)
 
-! fraction of not important particles to be thrown away
-! only useful when input_typethrowaway == 1
-PetscReal, parameter :: input_throwaway_frac = 0.9_kpr
+! fraction of not important particles to be removed
+! only useful when input_typeremove == 1
+PetscReal, parameter :: input_remove_frac = 0.9_kpr
 
 ! # of times of splitting particles
 ! (set to 0 to disable splitting)
