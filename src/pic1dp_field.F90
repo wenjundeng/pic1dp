@@ -123,10 +123,10 @@ CHKERRQ(global_ierr)
 !call global_matcreate(field_fourier_im, input_nx, input_nmode, &
 !  input_nmode, input_nmode)
 
-call ISCreateStride(PETSC_COMM_WORLD, input_nx, 0, 1, &
+call ISCreateStride(MPI_COMM_WORLD, input_nx, 0, 1, &
   field_is_electric, global_ierr)
 CHKERRQ(global_ierr)
-call ISCreateStride(PETSC_COMM_SELF, input_nx, 0, 1, &
+call ISCreateStride(MPI_COMM_SELF, input_nx, 0, 1, &
   field_is_electric_seq, global_ierr)
 CHKERRQ(global_ierr)
 call VecScatterCreate(field_electric, field_is_electric, &
