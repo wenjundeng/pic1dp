@@ -22,6 +22,7 @@
 MPIF90 := mpif90
 
 # compiling options
+#FFLAGS := -g -fbounds-check -ffpe-trap=invalid,zero,overflow # for debugging
 FFLAGS := -O3
 
 # MPI executor
