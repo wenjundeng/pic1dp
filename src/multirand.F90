@@ -1,4 +1,4 @@
-! Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+! Copyright 2012, 2013 Wenjun Deng <wdeng@wdeng.info>
 !
 ! This file is part of PIC1D-PETSc
 !
@@ -16,18 +16,17 @@
 ! along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
 
 
-! multirand is a 64-bit puedo-random number generator with multiple choices
+! this module is a 64-bit puedo-random number generator with multiple choices
 !   of algorithms and multiple choices of distributions
 ! (interfaces for 32-bit random numbers are also provided)
-! (32-bit interfaces are not fully tested yet)
-! multirand uses some Fortran 2003 features, make sure that your compiler
+! this module uses some Fortran 2003 features, make sure that your compiler
 !   supports Fortran 2003 standard (GNU Fortran 4.6 suffices)
 ! if your compiler does not support procedure pointer well, then
 !   use -DNO_PROC_POINTER option when compiling or uncomment the
 !   following line:
 ! #define NO_PROC_POINTER
 !
-! usage of multirand:
+! usage of this module:
 !   use multirand_init(...) to initialize multirand
 !   then you can use these functions to generate a single random number:
 !     multirand_int64(), multirand_int32(),
@@ -42,18 +41,18 @@
 !     multirand_real_array(array),
 !     multirand_gaussian_array(array)
 ! note that these functions and subroutines are NOT thread-safe,
-!   which needs to be addressed in future
+!   which needs to be addressed later
 module multirand
 implicit none
 
 ! macros for random integer to [0, 1] real conversion
-#define INT2REAL64(i) i / multirand_maxu64 + 0.5_mrkr64
-#define INT2REAL32(i) i / multirand_maxu32 + 0.5_mrkr32
+#define INT2REAL64(i) ((i) / multirand_maxu64 + 0.5_mrkr64)
+#define INT2REAL32(i) ((i) / multirand_maxu32 + 0.5_mrkr32)
 
 ! macros for extracting two 32-bit integers from a 64-bit integer
 ! 4294967295 = 0xFFFFFFFF
-#define INT64TO32_1(i) iand(i, 4294967295_mrki64)
-#define INT64TO32_2(i) ishft(i, -32)
+#define INT64TO32_1(i) int(iand(i, 4294967295_mrki64), mrki32)
+#define INT64TO32_2(i) int(ishft(i, -32), mrki32)
 
 ! macro for xor-shift operation
 #define XORSHFT(x, shft) ieor(x, ishft(x, shft))
@@ -150,7 +149,7 @@ integer, intent(in), optional :: seed_type
 !   same random number sequence
 integer, intent(in), optional :: mype
 
-! discard (warmup * multirand_nseed) of random numbers as warm-up
+! discard (warmup * nseed) of random numbers as warm-up
 ! if not specified, warmup = 5
 integer, intent(in), optional :: warmup
 
@@ -378,7 +377,7 @@ else
   warmup_act = 5
 end if
 do iseed = 1, warmup_act * nseed
-  flag = multirand_int64()
+  clock = multirand_int64()
 end do
 
 end subroutine multirand_init
@@ -386,7 +385,7 @@ end subroutine multirand_init
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! test if the random number generator is working correctly !
-! after calling this you should re-initialized seeds       !
+! after calling this you should re-initialize seeds        !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine multirand_selftest(mype)
 implicit none
@@ -618,14 +617,14 @@ integer(kind = mrkr32), dimension(:), intent(out) :: array
 
 integer(kind = mrki64) :: iarray, iarray_low, iarray_high, irand64
 
-iarray_low = 1
+iarray_low = 1_mrki64
 iarray_high = size(array, kind = mrki64)
 if (multirand_int32buf_filled) then
   array(iarray_low) = multirand_int32buf
   multirand_int32buf_filled = .false.
-  iarray_low = iarray_low + 1
+  iarray_low = iarray_low + 1_mrki64
 end if
-do iarray = iarray_low, iarray_high, 2
+do iarray = iarray_low, iarray_high, 2_mrki64
   irand64 = multirand_int64()
   array(iarray) = INT64TO32_1(irand64)
   if (iarray < iarray_high) then
@@ -662,17 +661,49 @@ end function multirand_real32
 ! fill array with 64-bit uniform [0, 1] real random numbers !
 ! use multirand_selftest() for safe boundary check          !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine multirand_real_array64(array)
+subroutine multirand_real_array64(array, exclude0, exclude1)
 implicit none
 
 ! array to fill in random numbers
 real(kind = mrkr64), dimension(:), intent(out) :: array
 
+! whether to exclude 0.0 and/or 1.0
+logical, intent(in), optional :: exclude0, exclude1
+
 integer(kind = mrki64) :: iarray
 
-do iarray = 1, size(array, kind = mrki64)
+logical :: exclude0_act, exclude1_act
+
+if (present(exclude0)) then
+  exclude0_act = exclude0
+else
+  exclude0_act = .false.
+end if
+if (present(exclude1)) then
+  exclude1_act = exclude1
+else
+  exclude1_act = .false.
+end if
+
+do iarray = 1_mrki64, size(array, kind = mrki64)
   array(iarray) = INT2REAL64(multirand_int64())
 end do
+
+if (exclude0_act) then
+  do iarray = 1_mrki64, size(array, kind = mrki64)
+    do while (array(iarray) == 0.0_mrkr64)
+      array(iarray) = INT2REAL64(multirand_int64())
+    end do
+  end do
+end if
+if (exclude1_act) then
+  do iarray = 1_mrki64, size(array, kind = mrki64)
+    do while (array(iarray) == 1.0_mrkr64)
+      array(iarray) = INT2REAL64(multirand_int64())
+    end do
+  end do
+end if
+
 end subroutine multirand_real_array64
 
 
@@ -680,31 +711,69 @@ end subroutine multirand_real_array64
 ! fill array with 32-bit uniform [0, 1] real random numbers !
 ! use multirand_selftest() for safe boundary check          !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine multirand_real_array32(array)
+subroutine multirand_real_array32(array, exclude0, exclude1)
 implicit none
 
 ! array to fill in random numbers
 real(kind = mrkr32), dimension(:), intent(out) :: array
 
+! whether to exclude 0.0 and/or 1.0
+logical, intent(in), optional :: exclude0, exclude1
+
 integer(kind = mrki64) :: iarray, iarray_low, iarray_high, irand64
 
-iarray_low = 1
+logical :: exclude0_act, exclude1_act
+
+if (present(exclude0)) then
+  exclude0_act = exclude0
+else
+  exclude0_act = .false.
+end if
+if (present(exclude1)) then
+  exclude1_act = exclude1
+else
+  exclude1_act = .false.
+end if
+
+iarray_low = 1_mrki64
 iarray_high = size(array, kind = mrki64)
 if (multirand_int32buf_filled) then
   array(iarray_low) = INT2REAL32(multirand_int32buf)
   multirand_int32buf_filled = .false.
-  iarray_low = iarray_low + 1
+  iarray_low = iarray_low + 1_mrki64
 end if
-do iarray = iarray_low, iarray_high, 2
+array(iarray_high) = -10.0_mrkr32
+do iarray = iarray_low, iarray_high - 1_mrki64, 2_mrki64
   irand64 = multirand_int64()
   array(iarray) = INT2REAL32(INT64TO32_1(irand64))
-  if (iarray < iarray_high) then
-    array(iarray + 1) = INT2REAL32(INT64TO32_2(irand64))
-  else
-    multirand_int32buf = INT64TO32_2(irand64)
-    multirand_int32buf_filled = .true.
-  end if
+!  write(*,'(2z20,i15,e20.5)')irand64,INT64TO32_1(irand64),&
+!  INT64TO32_1(irand64), array(iarray)
+  array(iarray + 1_mrki64) = INT2REAL32(INT64TO32_2(irand64))
+!  write(*,'(2z20,i15,e20.5)')irand64,INT64TO32_2(irand64),&
+!  INT64TO32_2(irand64), array(iarray + 1)
 end do
+if (array(iarray_high) < -5.0_mrkr32) then
+  irand64 = multirand_int64()
+  array(iarray_high) = INT2REAL32(INT64TO32_1(irand64))
+  multirand_int32buf = INT64TO32_2(irand64)
+  multirand_int32buf_filled = .true.
+end if
+
+if (exclude0_act) then
+  do iarray = 1_mrki64, size(array, kind = mrki64)
+    do while (array(iarray) == 0.0_mrkr32)
+      array(iarray) = INT2REAL32(multirand_int32())
+    end do
+  end do
+end if
+if (exclude1_act) then
+  do iarray = 1_mrki64, size(array, kind = mrki64)
+    do while (array(iarray) == 1.0_mrkr32)
+      array(iarray) = INT2REAL32(multirand_int32())
+    end do
+  end do
+end if
+
 end subroutine multirand_real_array32
 
 
@@ -775,15 +844,15 @@ real(kind = mrkr64), dimension(:), intent(out) :: array
 integer(kind = mrki64) :: iarray_low, iarray_high, iarray
 real(kind = mrkr64) :: x, y, w
 
-iarray_low = 1
+iarray_low = 1_mrki64
 iarray_high = size(array, kind = mrki64)
 
 if (multirand_gaussian64buf_filled) then
   array(iarray_low) = multirand_gaussian64buf
-  iarray_low = iarray_low + 1
+  iarray_low = iarray_low + 1_mrki64
   multirand_gaussian64buf_filled = .false.
 end if
-do iarray = iarray_low, iarray_high, 2
+do iarray = iarray_low, iarray_high, 2_mrki64
   do
     x = multirand_int64() / multirand_max64
     y = multirand_int64() / multirand_max64
@@ -793,7 +862,7 @@ do iarray = iarray_low, iarray_high, 2
   w = sqrt((-2.0_mrkr64 * log(w)) / w)
   array(iarray) = x * w
   if (iarray < iarray_high) then
-    array(iarray + 1) = y * w
+    array(iarray + 1_mrki64) = y * w
   else
     multirand_gaussian64buf = y * w
     multirand_gaussian64buf_filled = .true.
@@ -816,15 +885,15 @@ real(kind = mrkr32), dimension(:), intent(out) :: array
 integer(kind = mrki64) :: iarray_low, iarray_high, iarray, irand64
 real(kind = mrkr32) :: x, y, w
 
-iarray_low = 1
+iarray_low = 1_mrki64
 iarray_high = size(array, kind = mrki64)
 
 if (multirand_gaussian32buf_filled) then
   array(iarray_low) = multirand_gaussian32buf
-  iarray_low = iarray_low + 1
+  iarray_low = iarray_low + 1_mrki64
   multirand_gaussian32buf_filled = .false.
 end if
-do iarray = iarray_low, iarray_high, 2
+do iarray = iarray_low, iarray_high, 2_mrki64
   do
     irand64 = multirand_int64()
     x = INT64TO32_1(irand64) / multirand_max32
@@ -835,7 +904,7 @@ do iarray = iarray_low, iarray_high, 2
   w = sqrt((-2.0_mrkr32 * log(w)) / w)
   array(iarray) = x * w
   if (iarray < iarray_high) then
-    array(iarray + 1) = y * w
+    array(iarray + 1_mrki64) = y * w
   else
     multirand_gaussian32buf = y * w
     multirand_gaussian32buf_filled = .true.
