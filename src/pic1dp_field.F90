@@ -58,7 +58,7 @@ use pic1dp_input
 implicit none
 #include "finclude/petsc.h90"
 
-PetscInt :: ix, imode
+PetscInt :: ix, imode !, ix_low, ix_high
 PetscInt, dimension(1) :: arrix
 PetscInt :: nindex
 PetscInt, dimension(0 : input_nmode - 1) :: indexes
@@ -95,33 +95,52 @@ CHKERRQ(global_ierr)
 call VecDuplicate(field_mode_re, field_mode_grad_inv, global_ierr)
 CHKERRQ(global_ierr)
 
-call MatCreate(MPI_COMM_WORLD, field_fourier_re, global_ierr)
-CHKERRQ(global_ierr)
-call MatSetType(field_fourier_re, MATDENSE, global_ierr)
-CHKERRQ(global_ierr)
-call MatSetSizes( &
-  field_fourier_re, PETSC_DECIDE, PETSC_DECIDE, &
-  input_nx, input_nmode, global_ierr &
-)
-CHKERRQ(global_ierr)
-call MatSetFromOptions(field_fourier_re, global_ierr)
-CHKERRQ(global_ierr)
+!call MatCreate(MPI_COMM_WORLD, field_fourier_re, global_ierr)
+!CHKERRQ(global_ierr)
+!call MatSetType(field_fourier_re, MATDENSE, global_ierr)
+!CHKERRQ(global_ierr)
+!call MatSetSizes( &
+!  field_fourier_re, PETSC_DECIDE, PETSC_DECIDE, &
+!  input_nx, input_nmode, global_ierr &
+!)
+!CHKERRQ(global_ierr)
+!call MatCreateDense( &
+!  MPI_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, &
+!  input_nx, input_nmode, PETSC_NULL_SCALAR, &
+!  field_fourier_re, global_ierr &
+!)
+!CHKERRQ(global_ierr)
+!call MatSetUp(field_fourier_re, global_ierr)
+!CHKERRQ(global_ierr)
+!call MatSetFromOptions(field_fourier_re, global_ierr)
+!CHKERRQ(global_ierr)
 
-call MatCreate(MPI_COMM_WORLD, field_fourier_im, global_ierr)
-CHKERRQ(global_ierr)
-call MatSetType(field_fourier_im, MATDENSE, global_ierr)
-CHKERRQ(global_ierr)
-call MatSetSizes( &
-  field_fourier_im, PETSC_DECIDE, PETSC_DECIDE, &
-  input_nx, input_nmode, global_ierr &
-)
-CHKERRQ(global_ierr)
-call MatSetFromOptions(field_fourier_im, global_ierr)
-CHKERRQ(global_ierr)
-!call global_matcreate(field_fourier_re, input_nx, input_nmode, &
-!  input_nmode, input_nmode)
-!call global_matcreate(field_fourier_im, input_nx, input_nmode, &
-!  input_nmode, input_nmode)
+!call MatCreate(MPI_COMM_WORLD, field_fourier_im, global_ierr)
+!CHKERRQ(global_ierr)
+!call MatSetType(field_fourier_im, MATDENSE, global_ierr)
+!CHKERRQ(global_ierr)
+!call MatSetSizes( &
+!  field_fourier_im, PETSC_DECIDE, PETSC_DECIDE, &
+!  input_nx, input_nmode, global_ierr &
+!)
+!CHKERRQ(global_ierr)
+!call MatCreateDense( &
+!  MPI_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, &
+!  input_nx, input_nmode, PETSC_NULL_SCALAR, &
+!  field_fourier_im, global_ierr &
+!)
+!CHKERRQ(global_ierr)
+!call MatSetUp(field_fourier_re, global_ierr)
+!CHKERRQ(global_ierr)
+!call MatSetFromOptions(field_fourier_im, global_ierr)
+!CHKERRQ(global_ierr)
+
+! I failed to make the PETSc dense matrix work,
+! so here I use sparse matrix to work around
+call global_matcreate(field_fourier_re, input_nx, input_nmode, &
+  input_nmode, input_nmode)
+call global_matcreate(field_fourier_im, input_nx, input_nmode, &
+  input_nmode, input_nmode)
 
 call ISCreateStride(MPI_COMM_WORLD, input_nx, 0, 1, &
   field_is_electric, global_ierr)
