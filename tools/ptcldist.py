@@ -1,5 +1,25 @@
 #!/usr/bin/env python
 
+# Copyright 2013 Wenjun Deng <wdeng@wdeng.info>
+#
+# This file is part of PIC1D-PETSc
+#
+# PIC1D-PETSc is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# PIC1D-PETSc is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with PIC1D-PETSc.  If not, see <http://www.gnu.org/licenses/>.
+
+
+'''PIC1D-PETSc distribution data file generator'''
+
 import numpy as np
 import argparse
 import os
@@ -44,20 +64,6 @@ if args.xv[0] == 0:
     np.savetxt(fn_pd_xv, pd_xv)
     np.savetxt(fn_x, outdat.x_pd)
     np.savetxt(fn_v, outdat.v_pd)
-
-#    gpdat = np.zeros((outdat.nx_pd + 1, 3))
-#
-#    gpdat[:, 0] = outdat.x_pd
-#
-#    fgp = open(fn, 'w')
-#
-#    for iv, v in enumerate(outdat.v_pd):
-#        gpdat[:, 1] = v
-#        gpdat[:, 2] = pd[iv, :]
-#        np.savetxt(fgp, gpdat)
-#        fgp.write("\n")
-#
-#    fgp.close()
 
 else:
     pd_v = np.zeros((outdat.nv_pd, 2))

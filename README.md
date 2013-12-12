@@ -87,6 +87,8 @@ Python.
 	differences among runs.  Use `-h` option to see usage information.
 	+ `tools/dispersion.py` -- An app for numerical solution of analytic
 	dispersion.  Use `-h` option to see usage information.
+	+ `tools/ptcldist.py` -- A tool to generate particle distribution data
+	file.  Use `-h` option to see usage information.
 	+ `tools/OutputData.py` -- A class to deal with PIC1D-PETSc output data.
 	+ `tools/VisualDispersion.py` -- A class for plotting dispersion relation
 	and mode structure.
