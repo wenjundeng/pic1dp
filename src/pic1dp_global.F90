@@ -1,4 +1,4 @@
-! Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+! Copyright 2012, 2013 Wenjun Deng <wdeng@wdeng.info>
 !
 ! This file is part of PIC1D-PETSc
 !
@@ -112,15 +112,21 @@ call MatSetSizes( &
   nrow, ncol, global_ierr &
 )
 CHKERRQ(global_ierr)
-call MatSeqAIJSetPreallocation( &
-  mattocreate, d_nz, PETSC_NULL_INTEGER, global_ierr &
-)
+
+!call MatSeqAIJSetPreallocation( &
+!  mattocreate, d_nz, PETSC_NULL_INTEGER, global_ierr &
+!)
+!CHKERRQ(global_ierr)
+!call MatMPIAIJSetPreallocation( &
+!  mattocreate, d_nz, PETSC_NULL_INTEGER, &
+!  o_nz, PETSC_NULL_INTEGER, global_ierr &
+!)
+!CHKERRQ(global_ierr)
+
+! use default preallocation to avoid problem with manual preallocation
+call MatSetUp(mattocreate, global_ierr)
 CHKERRQ(global_ierr)
-call MatMPIAIJSetPreallocation( &
-  mattocreate, d_nz, PETSC_NULL_INTEGER, &
-  o_nz, PETSC_NULL_INTEGER, global_ierr &
-)
-CHKERRQ(global_ierr)
+
 call MatSetFromOptions(mattocreate, global_ierr)
 CHKERRQ(global_ierr)
 

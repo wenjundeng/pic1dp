@@ -1,4 +1,4 @@
-! Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+! Copyright 2012, 2013 Wenjun Deng <wdeng@wdeng.info>
 !
 ! This file is part of PIC1D-PETSc
 !
@@ -487,7 +487,7 @@ use pic1dp_particle
 implicit none
 #include "finclude/petsc.h90"
 
-! progress type. 0: header; 1: regular; 2: merge/throw away/split particle output
+! progress type. 0: header; 1: regular; 2: merge/remove/split marker output
 PetscInt, intent(in) :: progress_type
 
 ! electric energy, has to be provided if progress_type = 0

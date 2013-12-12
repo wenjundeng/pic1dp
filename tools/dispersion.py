@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+# Copyright 2012, 2013 Wenjun Deng <wdeng@wdeng.info>
 #
 # This file is part of PIC1D-PETSc
 #
@@ -159,7 +159,7 @@ class Dispersion:
             return self._omega
 
     def get_modestruct(self, ispecies, \
-        v_max = 8.0, nx = 64, nv = 128):
+        v_max = 8.0, nx = 64, nv = 64):
         self.solveomega()
         modestruct = np.zeros((nv, nx + 1))
         for iv in range(nv):
@@ -198,11 +198,13 @@ class Dispersion:
 
         # periodic boundary condition
         modestruct[:, nx] = modestruct[:, 0]
-        mg = np.meshgrid(\
-            (2.0 * np.pi / self.k) / nx * np.arange(nx + 1.0), \
-            (v_max * 2.0) / (nv - 1.0) * np.arange(nv) - v_max)
+        #mg = np.meshgrid(\
+        #    (2.0 * np.pi / self.k) / nx * np.arange(nx + 1.0), \
+        #    (v_max * 2.0) / (nv - 1.0) * np.arange(nv) - v_max)
+        arrx = (2.0 * np.pi / self.k) / nx * np.arange(nx + 1.0)
+        arrv = (v_max * 2.0) / (nv - 1.0) * np.arange(nv) - v_max
 
-        return [mg[0], mg[1], modestruct]
+        return [arrx, arrv, modestruct]
     # end of def get_modestruct()
 
     def print_komega(self, k = None, omega = None):
@@ -243,9 +245,10 @@ if __name__ == '__main__':
     parser.add_argument('-sks', metavar = '<k step size for scanning>', \
         help = 'specify step size of k for scanning; default: 0.005', \
         type = float, default = 0.005)
-    parser.add_argument('-vis', \
-        help = 'visualization, make plots of omega(k) and mode structure', \
-        action = 'store_true')
+    parser.add_argument('-vis', action = 'store_true', \
+        help = 'visualization, make plots of omega(k) and mode structure')
+    parser.add_argument('-sms', action = 'store_true', \
+        help = 'save mode structure to file')
     args = parser.parse_args()
     #print args
 
@@ -296,6 +299,13 @@ if __name__ == '__main__':
                     disp.print_komega(arrk[ik], arromega[ik])
         # end of if nk1 > 0
     #end of if nk > 1
+    if args.sms:
+        disp.set_k(args.k[0])
+        disp.append_guess([omega * 0.95, omega * 1.05, omega])
+        ms = disp.get_modestruct(disp.nspecies)
+        np.savetxt('x_disp.dat', ms[0])
+        np.savetxt('v_disp.dat', ms[1])
+        np.savetxt('ptcldist_xv_disp.dat', ms[2])
     if args.vis:
         import matplotlib.pyplot as plt
         import VisualDispersion

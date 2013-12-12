@@ -1,4 +1,4 @@
-! Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+! Copyright 2012, 2013 Wenjun Deng <wdeng@wdeng.info>
 !
 ! This file is part of PIC1D-PETSc
 !
@@ -28,11 +28,11 @@ use pic1dp_output
 implicit none
 
 ! the following line is to work around a bug in PETSc 3.3-p2 and before
-#include "finclude/petsctsdef.h"
+!#include "finclude/petsctsdef.h"
 
 #include "finclude/petsc.h90"
 
-character(len = 25), parameter :: version = '2012-10-17 17:24:55-04:00'
+character(len = 25), parameter :: version = '2013-12-11 22:07:57-05:00'
 
 ! status of termination condition: 0: not to terminate; 1: to terminate
 PetscInt :: itermination

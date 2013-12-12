@@ -1,4 +1,4 @@
-# Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+# Copyright 2012, 2013 Wenjun Deng <wdeng@wdeng.info>
 #
 # This file is part of PIC1D-PETSc
 #
@@ -18,6 +18,7 @@
 
 import numpy as np
 import matplotlib as mpl
+import matplotlib.pyplot as plt # needed for mpl.ticker
 
 class XScalarFormatter(mpl.ticker.ScalarFormatter):
     """eXtended ScalarFormatter"""

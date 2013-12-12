@@ -1,6 +1,6 @@
 PIC1D-PETSc
 ===========
-version 2012-10-17 17:24:55-04:00
+version 2013-12-11 22:07:57-05:00
 ---------------------------------
 
 PIC1D-PETSc (pic1dp) is a code simulating 1D electrostatic plasma by solving
@@ -35,7 +35,7 @@ System requirements
 PIC1D-PETSc requires MPI-2 and [PETSc](http://www.mcs.anl.gov/petsc/) 3.1+ with
 real scalars.  PIC1D-PETSc has been tested with
 [MPICH2](http://www.mcs.anl.gov/research/projects/mpich2/) 1.4,
-[OpenMPI](http://www.open-mpi.org/) 1.5 and PETSc 3.2.
+[OpenMPI](http://www.open-mpi.org/) 1.5 and PETSc 3.4.
 
 PIC1D-PETSc also requires a Fortran 2003 compiler for compilation.  PIC1D-PETSc
 has been tested with [GNU Fortran](http://gcc.gnu.org/fortran/) 4.6.
@@ -87,6 +87,8 @@ Python.
 	differences among runs.  Use `-h` option to see usage information.
 	+ `tools/dispersion.py` -- An app for numerical solution of analytic
 	dispersion.  Use `-h` option to see usage information.
+	+ `tools/ptcldist.py` -- A tool to generate particle distribution data
+	file.  Use `-h` option to see usage information.
 	+ `tools/OutputData.py` -- A class to deal with PIC1D-PETSc output data.
 	+ `tools/VisualDispersion.py` -- A class for plotting dispersion relation
 	and mode structure.

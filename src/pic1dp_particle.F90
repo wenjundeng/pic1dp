@@ -1,4 +1,4 @@
-! Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+! Copyright 2012, 2013 Wenjun Deng <wdeng@wdeng.info>
 !
 ! This file is part of PIC1D-PETSc
 !
@@ -22,8 +22,8 @@ use pic1dp_input
 implicit none
 #include "finclude/petscdef.h"
 
-! indexing particle optimization operations
-PetscInt :: particle_imerge, particle_ithrowaway, particle_isplit
+! indexing marker particle optimization operations
+PetscInt :: particle_imerge, particle_iremove, particle_isplit
 
 ! particle x coordinate, velocity
 ! equilibrium weight: p = f / g (nonlinear); p = f_0 / g (linear)
@@ -75,10 +75,10 @@ if (input_nmerge > 0) then
 else
   particle_imerge = 0 
 end if
-if (input_nthrowaway > 0) then
-  particle_ithrowaway = 1 
+if (input_nremove > 0) then
+  particle_iremove = 1 
 else
-  particle_ithrowaway = 0 
+  particle_iremove = 0 
 end if
 if (input_nsplit > 0) then
   particle_isplit = 1 
@@ -404,7 +404,7 @@ end subroutine particle_compute_dist_pertb_abs_v
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! merge not important particles               !
+! merge some unimportant particles            !
 ! using particle_dist_pertb_abs_v computed by !
 ! particle_compute_dist_pertb_abs_v           !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -523,17 +523,17 @@ end subroutine particle_merge
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! throw away some not important particles     !
+! remove some unimportant particles           !
 ! using particle_dist_pertb_abs_v computed by !
 ! particle_compute_dist_pertb_abs_v           !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine particle_throwaway(thsh_frac_dist_pertb_abs_v)
+subroutine particle_remove(thsh_frac_dist_pertb_abs_v)
 use multirand
 use pic1dp_global
 implicit none
 #include "finclude/petsc.h90"
 
-! throwing away threshold in terms of fraction of absolute value of
+! remove threshold in terms of fraction of absolute value of
 ! distribtuion in v
 PetscReal, intent(in) :: thsh_frac_dist_pertb_abs_v
 
@@ -579,7 +579,7 @@ do ispecies = 1, input_nspecies
       df = particle_dist_pertb_abs_v(ispecies, iv) * sv &
         + particle_dist_pertb_abs_v(ispecies, iv + 1) * (1.0_kpr - sv)
     end if ! else of if (iv < 0) elseif (iv > input_nv - 1)
-    if (input_typethrowaway == 1) then
+    if (input_typeremove == 1) then
       ! ignore important particle
       if (df >= df_thsh) cycle
     end if
@@ -591,9 +591,9 @@ do ispecies = 1, input_nspecies
       dice = multirand_real64()
     end if
 
-    if ((input_typethrowaway == 1 .and. dice < input_throwaway_frac) &
-      .or. (input_typethrowaway == 2 .and. dice > df)) then
-      ! throw away particle, and move the last particle to current index
+    if ((input_typeremove == 1 .and. dice < input_remove_frac) &
+      .or. (input_typeremove == 2 .and. dice > df)) then
+      ! remove particle, and move the last particle to current index
       if (ip < particle_np(ispecies)) then
         px(ip) = px(particle_np(ispecies))
         pv(ip) = pv(particle_np(ispecies))
@@ -604,9 +604,9 @@ do ispecies = 1, input_nspecies
       particle_np(ispecies) = particle_np(ispecies) - 1
     else
       ! keep particle, but scale up weight
-      if (input_typethrowaway == 1) then
-        pp(ip) = pp(ip) / (1.0_kpr - input_throwaway_frac)
-        pw(ip) = pw(ip) / (1.0_kpr - input_throwaway_frac)
+      if (input_typeremove == 1) then
+        pp(ip) = pp(ip) / (1.0_kpr - input_remove_frac)
+        pw(ip) = pw(ip) / (1.0_kpr - input_remove_frac)
       else
         pp(ip) = pp(ip) / df
         pw(ip) = pw(ip) / df
@@ -624,7 +624,7 @@ do ispecies = 1, input_nspecies
   CHKERRQ(global_ierr)
 end do ! ispecies = 1, input_nspecies
 
-end subroutine particle_throwaway
+end subroutine particle_remove
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -746,9 +746,9 @@ end do ! ispecies = 1, input_nspecies
 end subroutine particle_split
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! particle optimization, manage calling of merge/throwaway/split !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! marker particle optimization, manage calling of merge/remove/split !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine particle_optimize(flag_optimized)
 use wtimer
 use pic1dp_global
@@ -763,7 +763,7 @@ if (input_deltaf == 0) return ! now only support optimization for delta f
 
 call wtimer_start(global_iwt_particle_optimize)
 
-! merge not important particles
+! merge some unimportant particles
 if (particle_imerge > 0 .and. particle_imerge <= input_nmerge) then
   if ( &
     global_time + input_dt >= input_tmerge(particle_imerge) &
@@ -778,17 +778,17 @@ if (particle_imerge > 0 .and. particle_imerge <= input_nmerge) then
   end if
 end if
 
-! throw away some not important particles
-if (particle_ithrowaway > 0 .and. particle_ithrowaway <= input_nthrowaway) then
+! remove some unimportant particles
+if (particle_iremove > 0 .and. particle_iremove <= input_nremove) then
   if ( &
-    global_time + input_dt >= input_tthrowaway(particle_ithrowaway) &
+    global_time + input_dt >= input_tremove(particle_iremove) &
     .and. global_irk == 2 &
   ) then
     ! calculate absolute value of perturbed distribution in v
     call particle_compute_dist_pertb_abs_v
-    ! perform throwing away
-    call particle_throwaway(input_thshthrowaway(particle_ithrowaway))
-    particle_ithrowaway = particle_ithrowaway + 1
+    ! perform removal
+    call particle_remove(input_thshremove(particle_iremove))
+    particle_iremove = particle_iremove + 1
     flag_optimized = .true.
   end if
 end if
