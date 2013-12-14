@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+# Copyright 2012, 2013 Wenjun Deng <wdeng@wdeng.info>
 #
 # This file is part of PIC1D-PETSc
 #
@@ -24,11 +24,13 @@ import argparse
 import os
 import numpy as np
 import matplotlib as mpl
+mpl.rcParams['font.family'] = 'serif'
+mpl.rcParams['axes.formatter.use_mathtext'] = True
+mpl.rcParams['axes.formatter.limits'] = (-2, 3)
 import matplotlib.pyplot as plt
 import matplotlib.pylab as plb
 import matplotlib.widgets as widgets
 import OutputData
-import XScalarFormatter
 
 class VisualApp:
     """Class of visualization app"""
@@ -68,15 +70,6 @@ class VisualApp:
 
         self._cmap = mpl.colors.LinearSegmentedColormap('BWR', cdict, 256)
         self._levels = (np.arange(64) - 31.5) / 31.5
-
-        # formatters
-        self._scalar_t_formatter = XScalarFormatter.XScalarFormatter( \
-            useOffset = True, useMathText = True, precision = 2)
-        self._scalar_t_formatter.set_powerlimits((-2, 3))
-        self._ptcldist_xv_colorbar_formatter \
-            = XScalarFormatter.XScalarFormatter( \
-            useOffset = True, useMathText = True, precision = 2)
-        self._ptcldist_xv_colorbar_formatter.set_powerlimits((-2, 3))
 
         # layout
         self._fig = plt.figure(figsize = (22, 11))
@@ -285,7 +278,6 @@ class VisualApp:
         self._ax_scalar_t.clear()
         self._ax_scalar_t.set_xlabel('$\omega_{\mathrm{pe}} t$')
         self._ax_scalar_t.set_ylabel(self._scalar_labels[self._iscalar])
-        self._ax_scalar_t.yaxis.set_major_formatter(self._scalar_t_formatter)
         self._ax_scalar_t.plot( \
             self._scalar_t[0], self._scalar_t[iscalar])
         # time chooser indicator
@@ -374,8 +366,7 @@ class VisualApp:
         levels = fmin + (fmax - fmin) * np.arange(nlevel) / (nlevel - 1.0)
         cf = self._ax_ptcldist_xv.contourf( \
             self._data.xv_pd[0], self._data.xv_pd[1], ptcldist_xv, levels)
-        plt.colorbar(cf, cax = self._ax_ptcldist_xv_colorbar, \
-            format = self._ptcldist_xv_colorbar_formatter)
+        plt.colorbar(cf, cax = self._ax_ptcldist_xv_colorbar)
 
     def update_plot_ptcldist_v(self):
         '''Update plot for particle distribution in v space'''

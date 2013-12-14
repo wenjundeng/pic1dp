@@ -19,7 +19,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.widgets as widgets
-import XScalarFormatter
 
 class VisualDispersion:
     '''Class of visualization of dispersion'''
@@ -29,11 +28,6 @@ class VisualDispersion:
         self._arrk = arrk
         self._arromega = arromega
         self._ispecies = disp.nspecies
-        # formatters
-        self._modestruct_colorbar_formatter \
-            = XScalarFormatter.XScalarFormatter( \
-                useOffset = True, useMathText = True, precision = 2)
-        self._modestruct_colorbar_formatter.set_powerlimits((-2, 3))
         # layout
         self._fig = plt.figure(figsize = (13, 5))
         self._fig.canvas.set_window_title('Visual Dispersion')
@@ -119,8 +113,7 @@ class VisualDispersion:
         #print modestruct[0].shape, modestruct[1].shape, modestruct[2].shape
         cf = self._ax_modestruct.contourf( \
             x_mg, v_mg, modestruct[2], levels)
-        plt.colorbar(cf, cax = self._ax_modestruct_colorbar, \
-            format = self._modestruct_colorbar_formatter)
+        plt.colorbar(cf, cax = self._ax_modestruct_colorbar)
 
 # end of class VisualDispersion
 
