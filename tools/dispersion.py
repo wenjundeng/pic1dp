@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2012 Wenjun Deng <wdeng@wdeng.info>
+# Copyright 2012, 2013 Wenjun Deng <wdeng@wdeng.info>
 #
 # This file is part of PIC1D-PETSc
 #

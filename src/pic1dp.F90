@@ -32,7 +32,7 @@ implicit none
 
 #include "finclude/petsc.h90"
 
-character(len = 25), parameter :: version = '2012-10-17 17:24:55-04:00'
+character(len = 25), parameter :: version = '2013-12-11 22:07:57-05:00'
 
 ! status of termination condition: 0: not to terminate; 1: to terminate
 PetscInt :: itermination
