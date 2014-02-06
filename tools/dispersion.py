@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2012, 2013 Wenjun Deng <wdeng@wdeng.info>
+# Copyright 2012-2014 Wenjun Deng <wdeng@wdeng.info>
 #
 # This file is part of PIC1D-PETSc
 #
@@ -27,11 +27,9 @@ import numpy as np
 import scipy.special as special
 import sys
 
-def plasma_z(x):
+def plasma_zz(z):
     '''plasma dispersion Z function'''
-    #print x
-    return 1.0j * np.sqrt(np.pi) * np.exp(-x**2) \
-        * (1.0 - special.erf(-1.0j * x))
+    return 1.0j * np.sqrt(np.pi) * special.wofz(z)
 
 def muller(func, x0, x1, x2, functol = 1e-14, xtol = 1e-14, niter_max = 100):
     '''Find complex root using
@@ -64,10 +62,10 @@ def muller(func, x0, x1, x2, functol = 1e-14, xtol = 1e-14, niter_max = 100):
 class Dispersion:
     '''dispersion relation'''
 
-    #npara_nonspecies = 1
-    npara_species = 5
+    #nparam_nonspecies = 1
+    nparam_species = 5
 
-    def __init__(self, species_paras, k):
+    def __init__(self, species_params, k):
         self._guess0 = 0.4739 + 0.153j
         self._guess1 = 1.793 + 0.491j
         self._guess2 = 0.9371 + 0.287j
@@ -76,7 +74,7 @@ class Dispersion:
         self._omega = self._guess2
         self._solved = False
 
-        self.nspecies = len(species_paras) / self.npara_species
+        self.nspecies = len(species_params) / self.nparam_species
         self.species_charge = np.zeros(self.nspecies)
         self.species_mass = np.zeros(self.nspecies)
         self.species_temperature = np.zeros(self.nspecies)
@@ -84,20 +82,20 @@ class Dispersion:
         self.species_v0 = np.zeros(self.nspecies)
         for ispecies in range(self.nspecies):
             self.species_charge[ispecies] \
-                = species_paras[ispecies * self.npara_species]
-                #+ self.npara_nonspecies]
+                = species_params[ispecies * self.nparam_species]
+                #+ self.nparam_nonspecies]
             self.species_mass[ispecies] \
-                = species_paras[ispecies * self.npara_species + 1]
-                #+ self.npara_nonspecies + 1]
+                = species_params[ispecies * self.nparam_species + 1]
+                #+ self.nparam_nonspecies + 1]
             self.species_temperature[ispecies] \
-                = species_paras[ispecies * self.npara_species + 2]
-                #+ self.npara_nonspecies + 2]
+                = species_params[ispecies * self.nparam_species + 2]
+                #+ self.nparam_nonspecies + 2]
             self.species_density[ispecies] \
-                = species_paras[ispecies * self.npara_species + 3]
-                #+ self.npara_nonspecies + 3]
+                = species_params[ispecies * self.nparam_species + 3]
+                #+ self.nparam_nonspecies + 3]
             self.species_v0[ispecies] \
-                = species_paras[ispecies * self.npara_species + 4]
-                #+ self.npara_nonspecies + 4]
+                = species_params[ispecies * self.nparam_species + 4]
+                #+ self.nparam_nonspecies + 4]
 
     def set_k(self, k):
         '''change k'''
@@ -140,12 +138,12 @@ class Dispersion:
             zeta = (omega / self.k - self.species_v0[ispecies]) \
                 / np.sqrt(2.0 * vth2)
             #print 'zeta =', zeta
-            #print 'Z(zeta) =', plasma_z(zeta)
+            #print 'Z(zeta) =', plasma_zz(zeta)
             D += self.species_density[ispecies] \
                 * self.species_charge[ispecies]**2 \
                 / self.species_mass[ispecies] \
                 / (self.k**2 * vth2) \
-                * (1.0 + zeta * plasma_z(zeta))
+                * (1.0 + zeta * plasma_zz(zeta))
         return D
 
     def solveomega(self):
@@ -227,7 +225,7 @@ if __name__ == '__main__':
         + '1D electrostatic Vlasov-Poisson plasma consisted of '\
         + '(shifted) Maxwellian species')
 
-    parser.add_argument('para', metavar = 'dispersion parameters', \
+    parser.add_argument('params', metavar = 'dispersion parameters', \
         help = 'for each species, input charge Z, ' \
         + 'mass m, temperature T, density n, flow v0 in sequence', \
         nargs = '*', type = float)
@@ -252,10 +250,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     #print args
 
-    if len(args.para) < Dispersion.npara_species:
+    if len(args.params) < Dispersion.nparam_species:
         sys.exit('Error: not enough parameters for at least one species.')
 
-    disp = Dispersion(args.para, args.k[0])
+    disp = Dispersion(args.params, args.k[0])
     if args.ig is not None:
         disp.append_guess(args.ig)
 

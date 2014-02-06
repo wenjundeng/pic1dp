@@ -1,4 +1,4 @@
-! Copyright 2012, 2013 Wenjun Deng <wdeng@wdeng.info>
+! Copyright 2012-2014 Wenjun Deng <wdeng@wdeng.info>
 !
 ! This file is part of PIC1D-PETSc
 !
@@ -114,7 +114,7 @@ PetscInt, parameter :: input_nparticle_max = 6400000
 
 ! # of initial loaded marker particles for each species
 PetscInt, dimension(input_nspecies), parameter :: &
-  input_species_nparticle_init = (/ 6400000 /)
+  input_species_nparticle_init = input_nparticle_max
 
 ! marker distribution in velocity space:
 ! 1: same as physical distribution; 2: uniform
