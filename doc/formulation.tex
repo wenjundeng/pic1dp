@@ -53,11 +53,10 @@
 \makeatother
 
 \begin{document}
-\newcommand{\md}{\mathrm{d}}
-\newcommand{\me}{\mathrm{e}}
+\newcommand{\rmd}{\mathrm{d}}
 
 \title{1D electrostatic $\delta f$ particle-in-cell (PIC) formulation in vector-matrix form \\
-\large for \texttt{PIC1D-PETSc version 2014-02-06 11:21:42-05:00}}
+\large for \texttt{PIC1D-PETSc version 2014-05-12 12:03:27-04:00}}
 \author{Wenjun Deng}
 \maketitle
 
@@ -66,10 +65,10 @@
 \section{1D Vlasov-Poisson equations}
 
 \begin{eqnarray}
-	\frac{\md f_\alpha(x, v, t)}{\md t} & = & \partial_t f_\alpha(x, v, t) + v \partial_x f_\alpha(x, v, t) + \frac{Z_\alpha E(x, t)}{m_\alpha} \partial_v f_\alpha(x, v, t) \nonumber \\
+	\frac{\rmd f_\alpha(x, v, t)}{\rmd t} & = & \partial_t f_\alpha(x, v, t) + v \partial_x f_\alpha(x, v, t) + \frac{Z_\alpha E(x, t)}{m_\alpha} \partial_v f_\alpha(x, v, t) \nonumber \\
 	& = & 0 \textrm{ ,} \\
 	\partial_x E(x, t) & = & 4 \pi \sum_\alpha Z_\alpha n_\alpha(x, t) \textrm{ ,} \\
-	n_\alpha(x, t) & \equiv & \int_{-\infty}^{\infty} f_\alpha(x, v, t) \md v \textrm{ .}
+	n_\alpha(x, t) & \equiv & \int_{-\infty}^{\infty} f_\alpha(x, v, t) \rmd v \textrm{ .}
 \end{eqnarray}
 $\alpha$ indicates species.
 $f$ is particle distribution.
@@ -86,8 +85,8 @@ Decompose quantities into equilibrium part and perturbed part:
 \begin{eqnarray}
 	f_\alpha & = & f_{0 \alpha} + \delta f_\alpha \textrm{ ,} \\
 	n_\alpha & = & n_{0 \alpha} + \delta n_\alpha \textrm{ ,} \\
-	n_{0 \alpha} & \equiv & \int_{-\infty}^{\infty} f_{0 \alpha} \md v \textrm{ ,} \\
-	\delta n_{\alpha} & \equiv & \int_{-\infty}^{\infty} \delta f_{\alpha} \md v \textrm{ .}
+	n_{0 \alpha} & \equiv & \int_{-\infty}^{\infty} f_{0 \alpha} \rmd v \textrm{ ,} \\
+	\delta n_{\alpha} & \equiv & \int_{-\infty}^{\infty} \delta f_{\alpha} \rmd v \textrm{ .}
 \end{eqnarray}
 Note that equilibrium electrostatic field is zero, $E$ is perturbed field.
 
@@ -101,7 +100,7 @@ Although now multiple options for equilibrium distribution are implemented in \t
 
 $\delta f$ formulation:
 \begin{eqnarray}
-	\frac{\md}{\md t} \delta f_{\alpha} & = & - \frac{\md}{\md t} f_{0 \alpha} \nonumber \\
+	\frac{\rmd}{\rmd t} \delta f_{\alpha} & = & - \frac{\rmd}{\rmd t} f_{0 \alpha} \nonumber \\
 	& = & - \frac{Z_\alpha}{m_\alpha} E \partial_v f_{0 \alpha} \textrm{ ,} \\
 	\partial_x E & = & 4 \pi \sum_\alpha Z_\alpha \,\delta n_\alpha \textrm{ .}
 \end{eqnarray}
@@ -148,10 +147,10 @@ Note that for Maxwellian:
 \end{equation}
 $\delta f$ PIC formulation:
 \begin{eqnarray}
-	\frac{\md x_{j_\alpha}}{\md t} & = & v_{j_\alpha} \textrm{ ,} \label{eq:particle_evolution_begin} \\
-	\frac{\md v_{j_\alpha}}{\md t} & = & \frac{Z_\alpha}{m_\alpha} E(x_{j_\alpha}) \textrm{ ,} \\
-	\frac{\md p_{j_\alpha}}{\md t} & = & 0 \textrm{ ,} \\
-	\frac{\md w_{j_\alpha}}{\md t} & = & - (p_{j_\alpha} - w_{j_\alpha}) \frac{Z_\alpha}{m_\alpha} E(x_{j_\alpha}) \frac{\partial_v f_{0 \alpha}}{f_{0 \alpha}} \nonumber \\
+	\frac{\rmd x_{j_\alpha}}{\rmd t} & = & v_{j_\alpha} \textrm{ ,} \label{eq:particle_evolution_begin} \\
+	\frac{\rmd v_{j_\alpha}}{\rmd t} & = & \frac{Z_\alpha}{m_\alpha} E(x_{j_\alpha}) \textrm{ ,} \\
+	\frac{\rmd p_{j_\alpha}}{\rmd t} & = & 0 \textrm{ ,} \\
+	\frac{\rmd w_{j_\alpha}}{\rmd t} & = & - (p_{j_\alpha} - w_{j_\alpha}) \frac{Z_\alpha}{m_\alpha} E(x_{j_\alpha}) \frac{\partial_v f_{0 \alpha}}{f_{0 \alpha}} \nonumber \\
 	& = & (p_{j_\alpha} - w_{j_\alpha}) \frac{Z_\alpha}{T_\alpha} E(x_{j_\alpha}) v_{j_\alpha} \textrm{ ,} \label{eq:particle_evolution_end} \\
 	\partial_x E(x_{j_x}) & = & 4 \pi \sum_\alpha \sum_{j_\alpha} w_{j_\alpha} S_x(x_{j_x} - x_{j_\alpha}) \textrm{ ,} \label{eq:poisson_df_pic} \\
 	E(x_{j_\alpha}) & = & \sum_{j_x = 0}^{N_x - 1} E(x_{j_x}) S_x(x_{j_x} - x_{j_\alpha}) h_x \textrm{ .} \label{eq:field_scatter}
@@ -242,25 +241,12 @@ For example, $\boldsymbol{E}$ is given by:
 
 The particle evolution equations, i.e., Eqs.~\ref{eq:particle_evolution_begin}--\ref{eq:particle_evolution_end}, become:
 \begin{eqnarray}
-	\frac{\md \boldsymbol{x}_\alpha}{\md t} & = & \boldsymbol{v}_\alpha \textrm{ ,} \\
-	\frac{\md \boldsymbol{v}_\alpha}{\md t} & = & \frac{Z_\alpha}{m_\alpha} \boldsymbol{E}_\alpha \textrm{ ,} \\
-	\frac{\md \boldsymbol{p}_\alpha}{\md t} & = & 0 \textrm{ ,} \\
-	\frac{\md \boldsymbol{w}_\alpha}{\md t} & = & -(\boldsymbol{p} - \boldsymbol{w}) \frac{Z_\alpha}{T_\alpha} \mathrm{diag} (\boldsymbol{E}_\alpha) \boldsymbol{v}_\alpha \textrm{ ,}
+	\frac{\rmd \boldsymbol{x}_\alpha}{\rmd t} & = & \boldsymbol{v}_\alpha \textrm{ ,} \\
+	\frac{\rmd \boldsymbol{v}_\alpha}{\rmd t} & = & \frac{Z_\alpha}{m_\alpha} \boldsymbol{E}_\alpha \textrm{ ,} \\
+	\frac{\rmd \boldsymbol{p}_\alpha}{\rmd t} & = & 0 \textrm{ ,} \\
+	\frac{\rmd \boldsymbol{w}_\alpha}{\rmd t} & = & - \frac{Z_\alpha}{T_\alpha} (\boldsymbol{p}_\alpha - \boldsymbol{w}_\alpha) \circ \boldsymbol{E}_\alpha \circ \boldsymbol{v}_\alpha \textrm{ ,}
 \end{eqnarray}
-where $\mathrm{diag}()$ transforms a vector to a diagonal matrix:
-\begin{equation}
-	\mathrm{diag}(\boldsymbol{y}) = \mathrm{diag}( \left[ \begin{array}{c}
-		y_1 \\
-		y_2 \\
-		\vdots \\
-		y_N
-	\end{array} \right] ) \equiv \left[ \begin{array}{cccc}
-		y_1 & & & \\
-		 & y_2 & & \\
-		 & & \ddots & \\
-		 & & & y_N
-	\end{array} \right] \textrm{ ;}
-\end{equation}
+where $\circ$ is the element-wise multiplication (Hadamard product);
 $\boldsymbol{E}_\alpha$ is a vector of size $N_\alpha$, and each element is the electrostatic field at the corresponding particle's position:
 \begin{equation}
 	\boldsymbol{E}_\alpha = \left[ \begin{array}{c}
@@ -314,6 +300,20 @@ where vector $k$ in full-spectrum case is given by:
 		\frac{2 \pi}{l} \cdot 2 \\
 		\vdots \\
 		\frac{2 \pi}{l} \cdot (N_x - 1)
+	\end{array} \right] \textrm{ ;}
+\end{equation}
+$\mathrm{diag}()$ transforms a vector to a diagonal matrix:
+\begin{equation}
+	\mathrm{diag}(\boldsymbol{y}) = \mathrm{diag}( \left[ \begin{array}{c}
+		y_1 \\
+		y_2 \\
+		\vdots \\
+		y_N
+	\end{array} \right] ) \equiv \left[ \begin{array}{cccc}
+		y_1 & & & \\
+		 & y_2 & & \\
+		 & & \ddots & \\
+		 & & & y_N
 	\end{array} \right] \textrm{ .}
 \end{equation}
 If only some Fourier components are kept, then the size of $\boldsymbol{k}$ becomes the number of the kept components, and only the corresponding elements show up in $\boldsymbol{k}$.

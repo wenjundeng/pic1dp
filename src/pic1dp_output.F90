@@ -1,4 +1,4 @@
-! Copyright 2012, 2013 Wenjun Deng <wdeng@wdeng.info>
+! Copyright 2012-2014 Wenjun Deng <wdeng@wdeng.info>
 !
 ! This file is part of PIC1D-PETSc
 !
@@ -368,7 +368,7 @@ do ispecies = 1, input_nspecies
         * delx_inv * delv_inv
       ptcldist_pertb_v_redu(:) = ptcldist_pertb_v_redu(:) * delv_inv
     else
-      do iv = 0, input_nv - 1
+      do iv = 0, input_nv_opd - 1
         ! reuse sv for velocity value
         sv = (real(iv, kpr) / (input_nv_opd - 1) * 2.0_kpr - 1.0_kpr) &
           * input_v_max

@@ -127,7 +127,7 @@ PetscReal, parameter :: input_v_max = 8.0_kpr
 ! # of grid points in real space
 PetscInt, parameter :: input_nx = 192
 
-! # of grid points in velocity space for resonant detection
+! # of grid points in velocity space for resonance detection
 PetscInt, parameter :: input_nv = 128
 
 ! particle shape calculation
@@ -246,6 +246,7 @@ logical, parameter :: input_multirand_selftest = .true.
 PetscInt, parameter :: input_verbosity = 1
 
 ! time interval between data output (normalized by 1 / omega_pe)
+! must be at least input_dt * 2
 PetscReal, parameter :: input_output_interval = 0.5_kpr
 
 ! # of x grids for output of particle distribution
